@@ -17,11 +17,10 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
   bool _isPlaying = false;
   int _beatsPerMeasure = 4;
   int _currentBeat = 0;
-  int _currentSubdivision = 0;
+  bool _accentBeat1 = true;
   final TextEditingController _bpmController =
       TextEditingController(text: '120');
   final List<DateTime> _tapTimes = [];
-  bool _accentBeat1 = true;
 
   Isolate? _isolate;
   ReceivePort? _receivePort;
@@ -31,19 +30,8 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
       List.generate(4, (_) => AudioPlayer());
   final List<AudioPlayer> _clickPlayers =
       List.generate(4, (_) => AudioPlayer());
-  final List<AudioPlayer> _tickPlayers =
-      List.generate(4, (_) => AudioPlayer());
   int _accentIndex = 0;
   int _clickIndex = 0;
-  int _tickIndex = 0;
-
-  int _subdivision = 1;
-  final Map<int, String> _subdivisionLabels = {
-    1: 'Quarter Notes',
-    2: '8th Notes',
-    3: 'Triplets',
-    4: '16th Notes',
-  };
 
   @override
   void initState() {
@@ -62,11 +50,6 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
       for (final p in _clickPlayers) {
         await p.setSource(AssetSource('audio/click.wav'));
         await p.setVolume(1.0);
-        await p.setReleaseMode(ReleaseMode.stop);
-      }
-      for (final p in _tickPlayers) {
-        await p.setSource(AssetSource('audio/tick.wav'));
-        await p.setVolume(0.6);
         await p.setReleaseMode(ReleaseMode.stop);
       }
     } catch (e) {
@@ -111,14 +94,11 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
       } else {
         _playClick();
       }
-    } else {
-      _playTick();
     }
 
     if (mounted) {
       setState(() {
         _currentBeat = currentBeat;
-        _currentSubdivision = currentSubdivision;
       });
     }
   }
@@ -137,18 +117,11 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
     player.resume();
   }
 
-  void _playTick() {
-    final player = _tickPlayers[_tickIndex % 4];
-    _tickIndex++;
-    player.seek(Duration.zero);
-    player.resume();
-  }
-
   void _start() {
     _isolateSendPort?.send({
       'type': 'start',
       'bpm': _bpm,
-      'subdivision': _subdivision,
+      'subdivision': 1,
       'beatsPerMeasure': _beatsPerMeasure,
     });
     setState(() => _isPlaying = true);
@@ -160,7 +133,6 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
       setState(() {
         _isPlaying = false;
         _currentBeat = 0;
-        _currentSubdivision = 0;
       });
     }
   }
@@ -206,7 +178,6 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
     _receivePort?.close();
     for (final p in _accentPlayers) p.dispose();
     for (final p in _clickPlayers) p.dispose();
-    for (final p in _tickPlayers) p.dispose();
     _bpmController.dispose();
     super.dispose();
   }
@@ -273,36 +244,6 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
                         );
                       }),
               ),
-            ),
-            const SizedBox(height: 8),
-
-            // --- Subdivision Dots ---
-            SizedBox(
-              height: 16,
-              child: _subdivision > 1
-                  ? Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
-                      children: List.generate(
-                          _subdivision, (index) {
-                        final isActive =
-                            _currentSubdivision == index;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 4),
-                          width: isActive ? 10 : 6,
-                          height: isActive ? 10 : 6,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isActive
-                                ? Colors.deepPurpleAccent
-                                : colorScheme.onSurface
-                                    .withOpacity(0.2),
-                          ),
-                        );
-                      }),
-                    )
-                  : const SizedBox.shrink(),
             ),
             const SizedBox(height: 20),
 
@@ -429,52 +370,6 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
                         setState(() {
                           _beatsPerMeasure = val;
                           _currentBeat = 0;
-                        });
-                        if (_isPlaying) {
-                          _stop();
-                          _start();
-                        }
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // --- Subdivision ---
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Subdivision',
-                      style: TextStyle(fontSize: 15)),
-                  DropdownButton<int>(
-                    value: _subdivision,
-                    underline: const SizedBox(),
-                    items: _subdivisionLabels.entries
-                        .map((entry) => DropdownMenuItem(
-                              value: entry.key,
-                              child: Text(
-                                entry.value,
-                                style: const TextStyle(
-                                    fontWeight:
-                                        FontWeight.bold),
-                              ),
-                            ))
-                        .toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _subdivision = val;
-                          _currentSubdivision = 0;
                         });
                         if (_isPlaying) {
                           _stop();
