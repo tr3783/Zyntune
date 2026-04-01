@@ -3,8 +3,7 @@ import 'package:record/record.dart';
 import 'package:pitch_detector_dart/pitch_detector.dart';
 import 'dart:math' as math;
 import 'dart:async';
-import 'dart:io';
-import 'package:path_provider/path_provider.dart';
+import 'dart:typed_data';
 
 class TunerScreen extends StatefulWidget {
   const TunerScreen({super.key});
@@ -19,9 +18,13 @@ class _TunerScreenState extends State<TunerScreen> {
   String _detectedNote = '--';
   double _cents = 0.0;
   bool _disposed = false;
-  final Record _record = Record();
-  Timer? _analysisTimer;
-  String? _recordingPath;
+
+  final AudioRecorder _recorder = AudioRecorder();
+  StreamSubscription<Uint8List>? _audioSub;
+  final List<int> _buffer = [];
+
+  static const int _sampleRate = 44100;
+  static const int _bufferSize = 4096;
 
   final List<String> _noteNames = [
     'C', 'C#', 'D', 'D#', 'E', 'F',
@@ -40,64 +43,52 @@ class _TunerScreenState extends State<TunerScreen> {
   @override
   void dispose() {
     _disposed = true;
-    _analysisTimer?.cancel();
-    _record.dispose();
+    _audioSub?.cancel();
+    _recorder.dispose();
     super.dispose();
   }
 
   Future<void> _startListening() async {
     try {
-      final hasPermission = await _record.hasPermission();
+      final hasPermission =
+          await _recorder.hasPermission();
       if (!hasPermission) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Microphone permission denied. Go to Settings → Practice Pilot → Microphone and enable it.',
+                'Microphone permission denied. Go to Settings → Practice Pilot → Microphone.',
               ),
               backgroundColor: Colors.red,
-              duration: Duration(seconds: 5),
+              duration: Duration(seconds: 4),
             ),
           );
         }
         return;
       }
 
-      final dir = await getTemporaryDirectory();
-      _recordingPath = '${dir.path}/tuner_temp.wav';
-
-await _record.start(
-        path: _recordingPath!,
-        encoder: AudioEncoder.aacLc,
-        samplingRate: 44100,
-        numChannels: 1,
-        bitRate: 128000,
+      final stream = await _recorder.startStream(
+        const RecordConfig(
+          encoder: AudioEncoder.pcm16bits,
+          sampleRate: _sampleRate,
+          numChannels: 1,
+        ),
       );
 
       if (mounted) setState(() => _isListening = true);
 
-      // Analyze amplitude every 200ms to show activity
-      _analysisTimer = Timer.periodic(
-        const Duration(milliseconds: 200),
-        (_) async {
-          if (_disposed) return;
-          try {
-            final amp = await _record.getAmplitude();
-            if (!_disposed && mounted && amp.current > -30) {
-              // Microphone is picking up sound
-              // Simulate note detection based on amplitude
-              // for visual feedback
-            }
-          } catch (e) {
-            // Silently handle
-          }
-        },
-      );
+      _audioSub = stream.listen((data) {
+        _buffer.addAll(data);
+        while (_buffer.length >= _bufferSize * 2) {
+          _processBuffer();
+          _buffer.removeRange(0, _bufferSize);
+        }
+      });
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error starting tuner: $e'),
+            content: Text('Error: $e'),
             backgroundColor: Colors.red,
           ),
         );
@@ -105,14 +96,37 @@ await _record.start(
     }
   }
 
-  Future<void> _stopListening() async {
-    _analysisTimer?.cancel();
-    _analysisTimer = null;
+  void _processBuffer() async {
+    if (_disposed) return;
     try {
-      await _record.stop();
+      final bytes = Uint8List.fromList(
+          _buffer.take(_bufferSize * 2).toList());
+      final detector = PitchDetector(
+        audioSampleRate: _sampleRate.toDouble(),
+        bufferSize: _bufferSize,
+      );
+      final result =
+          await detector.getPitchFromIntBuffer(bytes);
+      if (!_disposed && mounted && result.pitched) {
+        final freq = result.pitch;
+        if (freq > 50 && freq < 2000) {
+          setState(() {
+            _currentPitch = freq;
+            _detectedNote = _getNoteName(freq);
+            _cents = _getCents(freq);
+          });
+        }
+      }
     } catch (e) {
       // Silently handle
     }
+  }
+
+  Future<void> _stopListening() async {
+    await _audioSub?.cancel();
+    _audioSub = null;
+    await _recorder.stop();
+    _buffer.clear();
     if (!_disposed && mounted) {
       setState(() {
         _isListening = false;
@@ -153,9 +167,9 @@ await _record.start(
     if (!_isListening) return 'Tap Start Tuner';
     if (_detectedNote == '--') return 'Play a note...';
     final absCents = _cents.abs();
-    if (absCents < 5) return 'In Tune!';
-    if (_cents > 0) return 'Too Sharp ↓ tune down';
-    return 'Too Flat ↑ tune up';
+    if (absCents < 5) return 'In Tune! ✓';
+    if (_cents > 0) return 'Too Sharp — tune down ↓';
+    return 'Too Flat — tune up ↑';
   }
 
   @override
@@ -177,7 +191,8 @@ await _record.start(
             // --- Note Display ---
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 32),
+              padding:
+                  const EdgeInsets.symmetric(vertical: 32),
               decoration: BoxDecoration(
                 color: tuningColor.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(24),
@@ -251,7 +266,8 @@ await _record.start(
                     ),
                     Align(
                       alignment: Alignment(
-                          (_cents / 50).clamp(-1.0, 1.0), 0),
+                          (_cents / 50).clamp(-1.0, 1.0),
+                          0),
                       child: Container(
                         width: 16,
                         height: 28,
@@ -297,26 +313,31 @@ await _record.start(
                     ? _stopListening
                     : _startListening,
                 icon: Icon(
-                    _isListening ? Icons.mic_off : Icons.mic,
+                    _isListening
+                        ? Icons.mic_off
+                        : Icons.mic,
                     size: 28),
                 label: Text(
-                  _isListening ? 'Stop Tuner' : 'Start Tuner',
+                  _isListening
+                      ? 'Stop Tuner'
+                      : 'Start Tuner',
                   style: const TextStyle(fontSize: 18),
                 ),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor:
-                      _isListening ? Colors.red : Colors.green,
+                  backgroundColor: _isListening
+                      ? Colors.red
+                      : Colors.green,
                   foregroundColor: Colors.white,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                      vertical: 16),
                   shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(30)),
+                      borderRadius:
+                          BorderRadius.circular(30)),
                 ),
               ),
             ),
             const SizedBox(height: 16),
 
-            // --- Mic active indicator ---
             if (_isListening)
               Container(
                 padding: const EdgeInsets.all(12),
@@ -328,12 +349,14 @@ await _record.start(
                 ),
                 child: const Row(
                   children: [
-                    Icon(Icons.mic, color: Colors.green, size: 18),
+                    Icon(Icons.mic,
+                        color: Colors.green, size: 18),
                     SizedBox(width: 8),
                     Text(
                       'Microphone active — play a note!',
                       style: TextStyle(
-                          fontSize: 13, color: Colors.green),
+                          fontSize: 13,
+                          color: Colors.green),
                     ),
                   ],
                 ),
@@ -356,7 +379,8 @@ await _record.start(
                       child: Text(
                         'Hold instrument close to mic and play one note at a time.',
                         style: TextStyle(
-                            fontSize: 12, color: Colors.blue),
+                            fontSize: 12,
+                            color: Colors.blue),
                       ),
                     ),
                   ],
@@ -388,12 +412,14 @@ await _record.start(
                 decoration: BoxDecoration(
                   color: isDetected
                       ? Colors.green.withOpacity(0.15)
-                      : colorScheme.onSurface.withOpacity(0.05),
+                      : colorScheme.onSurface
+                          .withOpacity(0.05),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: isDetected
                         ? Colors.green
-                        : colorScheme.onSurface.withOpacity(0.15),
+                        : colorScheme.onSurface
+                            .withOpacity(0.15),
                   ),
                 ),
                 child: Row(
@@ -405,7 +431,8 @@ await _record.start(
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 15,
-                        color: isDetected ? Colors.green : null,
+                        color:
+                            isDetected ? Colors.green : null,
                       ),
                     ),
                     Text(
