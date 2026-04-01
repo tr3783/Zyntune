@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../main.dart';
 import '../streak_helper.dart';
@@ -117,6 +118,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSetGoalDialog() {
     int tempGoal = _dailyGoalMinutes;
+    final customController = TextEditingController(
+        text: '$_dailyGoalMinutes');
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -125,35 +129,87 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                '$tempGoal minutes per day',
-                style: const TextStyle(
-                    fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              const SizedBox(height: 16),
-              Slider(
-                value: tempGoal.toDouble(),
-                min: 5,
-                max: 120,
-                divisions: 23,
-                label: '$tempGoal min',
-                activeColor: Colors.teal,
-                onChanged: (val) =>
-                    setDialogState(() => tempGoal = val.round()),
-              ),
-              const SizedBox(height: 8),
+              // Quick presets
               Wrap(
                 spacing: 8,
-                children: [15, 20, 30, 45, 60]
-                    .map((min) => ActionChip(
-                          label: Text('$min min'),
-                          onPressed: () => setDialogState(
-                              () => tempGoal = min),
-                          backgroundColor: tempGoal == min
-                              ? Colors.teal.withOpacity(0.3)
-                              : null,
+                runSpacing: 8,
+                children: [15, 20, 30, 45, 60, 90]
+                    .map((min) => GestureDetector(
+                          onTap: () {
+                            setDialogState(() {
+                              tempGoal = min;
+                              customController.text = '$min';
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: tempGoal == min
+                                  ? Colors.teal
+                                  : Colors.teal.withOpacity(0.1),
+                              borderRadius:
+                                  BorderRadius.circular(20),
+                              border: Border.all(
+                                color: Colors.teal
+                                    .withOpacity(0.4),
+                              ),
+                            ),
+                            child: Text(
+                              '$min min',
+                              style: TextStyle(
+                                color: tempGoal == min
+                                    ? Colors.white
+                                    : Colors.teal,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
                         ))
                     .toList(),
+              ),
+              const SizedBox(height: 20),
+
+              // Custom input
+              Row(
+                children: [
+                  const Text('Custom: ',
+                      style: TextStyle(fontSize: 15)),
+                  SizedBox(
+                    width: 80,
+                    child: TextField(
+                      controller: customController,
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        LengthLimitingTextInputFormatter(3),
+                      ],
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
+                      ),
+                      onChanged: (val) {
+                        final mins = int.tryParse(val);
+                        if (mins != null && mins > 0) {
+                          setDialogState(() => tempGoal = mins);
+                        }
+                      },
+                    ),
+                  ),
+                  const Text(' minutes',
+                      style: TextStyle(fontSize: 15)),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Current goal: $tempGoal minutes/day',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.teal,
+                ),
               ),
             ],
           ),
@@ -166,8 +222,10 @@ class _HomeScreenState extends State<HomeScreen> {
               onPressed: () async {
                 final prefs =
                     await SharedPreferences.getInstance();
-                await prefs.setInt('dailyGoalMinutes', tempGoal);
+                await prefs.setInt(
+                    'dailyGoalMinutes', tempGoal);
                 setState(() => _dailyGoalMinutes = tempGoal);
+                customController.dispose();
                 if (mounted) Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(

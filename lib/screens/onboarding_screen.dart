@@ -22,35 +22,35 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   ];
 
   final List<_OnboardingPage> _pages = [
-    _OnboardingPage(
+    const _OnboardingPage(
       emoji: '🎵',
       title: 'Welcome to\nPractice Pilot',
       subtitle:
           'Your personal music practice assistant. Track sessions, set goals, and grow as a musician.',
       color: Colors.deepPurple,
     ),
-    _OnboardingPage(
+    const _OnboardingPage(
       emoji: '⏱️',
       title: 'Track Your\nPractice Time',
       subtitle:
           'Use the stopwatch or countdown timer to log every session. Build consistency and watch your hours grow.',
       color: Colors.teal,
     ),
-    _OnboardingPage(
+    const _OnboardingPage(
       emoji: '🎯',
       title: 'Set Goals &\nStay Motivated',
       subtitle:
           'Set daily practice goals, track your streak, and celebrate your progress with detailed stats.',
       color: Colors.orange,
     ),
-    _OnboardingPage(
+    const _OnboardingPage(
       emoji: '🎼',
       title: 'Manage Your\nRepertoire',
       subtitle:
           'Keep track of every piece you\'re learning, in progress, or have mastered. Add notes and links.',
       color: Colors.pink,
     ),
-    _OnboardingPage(
+    const _OnboardingPage(
       emoji: '🚀',
       title: 'Let\'s Get\nStarted!',
       subtitle: 'Tell us a little about yourself.',
@@ -303,7 +303,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              value: _selectedInstrument,
+              initialValue: _selectedInstrument,
               decoration: InputDecoration(
                 labelText: 'Your Instrument',
                 border: const OutlineInputBorder(),

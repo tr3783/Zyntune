@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'dart:async';
-import 'dart:isolate';
-import 'metronome_isolate.dart';
 
 class MetronomeScreen extends StatefulWidget {
   const MetronomeScreen({super.key});
@@ -15,126 +13,57 @@ class MetronomeScreen extends StatefulWidget {
 class _MetronomeScreenState extends State<MetronomeScreen> {
   int _bpm = 120;
   bool _isPlaying = false;
-  int _beatsPerMeasure = 4;
-  int _currentBeat = 0;
-  bool _accentBeat1 = true;
+  Timer? _timer;
   final TextEditingController _bpmController =
       TextEditingController(text: '120');
   final List<DateTime> _tapTimes = [];
-
-  Isolate? _isolate;
-  ReceivePort? _receivePort;
-  SendPort? _isolateSendPort;
-
-  final List<AudioPlayer> _accentPlayers =
-      List.generate(4, (_) => AudioPlayer());
-  final List<AudioPlayer> _clickPlayers =
-      List.generate(4, (_) => AudioPlayer());
-  int _accentIndex = 0;
-  int _clickIndex = 0;
+  final List<AudioPlayer> _players =
+      List.generate(8, (_) => AudioPlayer());
+  int _playerIndex = 0;
 
   @override
   void initState() {
     super.initState();
-    _preloadAudio();
-    _initIsolate();
+    _initPlayers();
   }
 
-  Future<void> _preloadAudio() async {
-    try {
-      for (final p in _accentPlayers) {
-        await p.setSource(AssetSource('audio/accent.wav'));
-        await p.setVolume(1.0);
-        await p.setReleaseMode(ReleaseMode.stop);
-      }
-      for (final p in _clickPlayers) {
-        await p.setSource(AssetSource('audio/click.wav'));
-        await p.setVolume(1.0);
-        await p.setReleaseMode(ReleaseMode.stop);
-      }
-    } catch (e) {
-      // Silently handle
+  Future<void> _initPlayers() async {
+    for (final p in _players) {
+      await p.setReleaseMode(ReleaseMode.stop);
+      await p.setVolume(1.0);
+      await p.setSource(AssetSource('audio/click.wav'));
     }
   }
 
-  Future<void> _initIsolate() async {
-    _receivePort = ReceivePort();
-    _isolate = await Isolate.spawn(
-      metronomeIsolateEntry,
-      _receivePort!.sendPort,
-    );
-
-    _receivePort!.listen((message) {
-      if (message is SendPort) {
-        _isolateSendPort = message;
-      } else if (message is Map) {
-        if (message['type'] == 'tick') {
-          _onTick(
-            isMainBeat: message['isMainBeat'] as bool,
-            isFirstBeat: message['isFirstBeat'] as bool,
-            currentBeat: message['currentBeat'] as int,
-            currentSubdivision:
-                message['currentSubdivision'] as int,
-          );
-        }
-      }
-    });
-  }
-
-  void _onTick({
-    required bool isMainBeat,
-    required bool isFirstBeat,
-    required int currentBeat,
-    required int currentSubdivision,
-  }) {
-    if (isMainBeat) {
-      if (_accentBeat1 && isFirstBeat &&
-          _beatsPerMeasure > 1) {
-        _playAccent();
-      } else {
-        _playClick();
-      }
+  @override
+  void dispose() {
+    _timer?.cancel();
+    for (final p in _players) {
+      p.dispose();
     }
-
-    if (mounted) {
-      setState(() {
-        _currentBeat = currentBeat;
-      });
-    }
+    _bpmController.dispose();
+    super.dispose();
   }
 
-  void _playAccent() {
-    final player = _accentPlayers[_accentIndex % 4];
-    _accentIndex++;
-    player.seek(Duration.zero);
-    player.resume();
-  }
-
-  void _playClick() {
-    final player = _clickPlayers[_clickIndex % 4];
-    _clickIndex++;
-    player.seek(Duration.zero);
-    player.resume();
+  void _tick() {
+    final player = _players[_playerIndex % _players.length];
+    _playerIndex++;
+    player.seek(Duration.zero).then((_) => player.resume());
   }
 
   void _start() {
-    _isolateSendPort?.send({
-      'type': 'start',
-      'bpm': _bpm,
-      'subdivision': 1,
-      'beatsPerMeasure': _beatsPerMeasure,
-    });
+    _timer?.cancel();
+    _tick();
+    final interval =
+        Duration(microseconds: (60000000 / _bpm).round());
+    _timer = Timer.periodic(interval, (_) => _tick());
     setState(() => _isPlaying = true);
   }
 
   void _stop() {
-    _isolateSendPort?.send({'type': 'stop'});
-    if (mounted) {
-      setState(() {
-        _isPlaying = false;
-        _currentBeat = 0;
-      });
-    }
+    _timer?.cancel();
+    _timer = null;
+    setState(() => _isPlaying = false);
   }
 
   void _updateBpm(int newBpm) {
@@ -146,10 +75,7 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
         TextPosition(offset: _bpmController.text.length),
       );
     });
-    if (_isPlaying) {
-      _stop();
-      _start();
-    }
+    if (_isPlaying) _start();
   }
 
   void _tapTempo() {
@@ -163,23 +89,10 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
             .difference(_tapTimes[i - 1])
             .inMilliseconds);
       }
-      final avgInterval =
+      final avg =
           intervals.reduce((a, b) => a + b) / intervals.length;
-      final newBpm =
-          (60000 / avgInterval).round().clamp(40, 240);
-      _updateBpm(newBpm);
+      _updateBpm((60000 / avg).round());
     }
-  }
-
-  @override
-  void dispose() {
-    _isolateSendPort?.send({'type': 'stop'});
-    _isolate?.kill(priority: Isolate.immediate);
-    _receivePort?.close();
-    for (final p in _accentPlayers) p.dispose();
-    for (final p in _clickPlayers) p.dispose();
-    _bpmController.dispose();
-    super.dispose();
   }
 
   @override
@@ -192,291 +105,176 @@ class _MetronomeScreenState extends State<MetronomeScreen> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: colorScheme.inversePrimary,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
-        child: Column(
-          children: [
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 48),
+          child: Column(
+            children: [
+              const SizedBox(height: 20),
 
-            // --- Beat Indicator Dots ---
-            SizedBox(
-              height: 32,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: _beatsPerMeasure == 1
-                    ? [
-                        Container(
-                          width: 22,
-                          height: 22,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: _currentBeat == 1
-                                ? Colors.deepPurple
-                                : colorScheme.onSurface
-                                    .withOpacity(0.3),
-                          ),
-                        )
-                      ]
-                    : List.generate(_beatsPerMeasure,
-                        (index) {
-                        final isActive =
-                            _currentBeat == index + 1;
-                        final isFirst = index == 0;
-                        return Container(
-                          margin: const EdgeInsets.symmetric(
-                              horizontal: 6),
-                          width: 18,
-                          height: 18,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: isActive
-                                ? (isFirst && _accentBeat1
-                                    ? Colors.deepOrange
-                                    : Colors.deepPurple)
-                                : colorScheme.onSurface
-                                    .withOpacity(0.3),
-                            border: isFirst && _accentBeat1
-                                ? Border.all(
-                                    color: Colors.deepOrange
-                                        .withOpacity(0.5),
-                                    width: 2)
-                                : null,
-                          ),
-                        );
-                      }),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // --- BPM Display ---
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.deepPurple.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: Colors.deepPurple.withOpacity(0.3)),
-              ),
-              child: Column(
-                children: [
-                  const Text('BPM',
-                      style: TextStyle(fontSize: 16)),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: 140,
-                    child: TextField(
-                      controller: _bpmController,
-                      keyboardType: TextInputType.number,
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(
-                        fontSize: 72,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      decoration: const InputDecoration(
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                      ),
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
-                        LengthLimitingTextInputFormatter(3),
-                      ],
-                      onSubmitted: (val) {
-                        final bpm = int.tryParse(val) ?? 120;
-                        _updateBpm(bpm);
-                      },
-                      onChanged: (val) {
-                        final bpm = int.tryParse(val);
-                        if (bpm != null &&
-                            bpm >= 40 &&
-                            bpm <= 240) {
-                          setState(() => _bpm = bpm);
-                          if (_isPlaying) {
-                            _stop();
-                            _start();
-                          }
-                        }
-                      },
-                    ),
-                  ),
-                  Text(
-                    'Tap to type  |  Range: 40 - 240',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: colorScheme.onSurface
-                          .withOpacity(0.5),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // --- BPM Slider ---
-            Row(
-              children: [
-                Text('40',
-                    style: TextStyle(
-                        color: colorScheme.onSurface
-                            .withOpacity(0.5))),
-                Expanded(
-                  child: Slider(
-                    value: _bpm.toDouble(),
-                    min: 40,
-                    max: 240,
-                    divisions: 200,
-                    label: '$_bpm BPM',
-                    activeColor: Colors.deepPurple,
-                    onChanged: (value) =>
-                        _updateBpm(value.round()),
-                  ),
+              // --- BPM Display ---
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.deepPurple.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(
+                      color:
+                          Colors.deepPurple.withOpacity(0.3)),
                 ),
-                Text('240',
-                    style: TextStyle(
-                        color: colorScheme.onSurface
-                            .withOpacity(0.5))),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            // --- Beats Per Measure ---
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Beats per measure',
-                      style: TextStyle(fontSize: 15)),
-                  DropdownButton<int>(
-                    value: _beatsPerMeasure,
-                    underline: const SizedBox(),
-                    items: [1, 2, 3, 4, 6].map((val) {
-                      return DropdownMenuItem(
-                        value: val,
-                        child: Text(
-                          val == 1 ? '1 (steady)' : '$val',
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold),
-                        ),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      if (val != null) {
-                        setState(() {
-                          _beatsPerMeasure = val;
-                          _currentBeat = 0;
-                        });
-                        if (_isPlaying) {
-                          _stop();
-                          _start();
-                        }
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-
-            // --- Accent Beat 1 Toggle ---
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                color: colorScheme.onSurface.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment:
-                        CrossAxisAlignment.start,
-                    children: [
-                      const Text('Accent Beat 1',
-                          style: TextStyle(fontSize: 15)),
-                      Text(
-                        'Higher pitch on the downbeat',
+                child: Column(
+                  children: [
+                    const Text('BPM',
                         style: TextStyle(
-                          fontSize: 11,
-                          color: colorScheme.onSurface
-                              .withOpacity(0.5),
+                            fontSize: 16,
+                            letterSpacing: 3,
+                            color: Colors.deepPurple)),
+                    SizedBox(
+                      width: 160,
+                      child: TextField(
+                        controller: _bpmController,
+                        keyboardType: TextInputType.number,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 80,
+                          fontWeight: FontWeight.bold,
                         ),
-                      ),
-                    ],
-                  ),
-                  Switch(
-                    value: _accentBeat1,
-                    onChanged: _beatsPerMeasure > 1
-                        ? (val) {
-                            setState(
-                                () => _accentBeat1 = val);
-                            if (_isPlaying) {
-                              _stop();
-                              _start();
-                            }
+                        decoration: const InputDecoration(
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                        inputFormatters: [
+                          FilteringTextInputFormatter
+                              .digitsOnly,
+                          LengthLimitingTextInputFormatter(3),
+                        ],
+                        onChanged: (val) {
+                          final bpm = int.tryParse(val);
+                          if (bpm != null &&
+                              bpm >= 40 &&
+                              bpm <= 240) {
+                            setState(() => _bpm = bpm);
+                            if (_isPlaying) _start();
                           }
-                        : null,
-                    activeColor: Colors.deepOrange,
+                        },
+                        onSubmitted: (val) {
+                          final bpm =
+                              int.tryParse(val) ?? _bpm;
+                          _updateBpm(bpm);
+                          FocusScope.of(context).unfocus();
+                        },
+                        onTapOutside: (_) {
+                          final bpm = int.tryParse(
+                                  _bpmController.text) ??
+                              _bpm;
+                          _updateBpm(bpm);
+                          FocusScope.of(context).unfocus();
+                        },
+                      ),
+                    ),
+                    Text(
+                      'Tap to type  •  40–240',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: colorScheme.onSurface
+                            .withOpacity(0.4),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 20),
+
+              // --- BPM Slider ---
+              Row(
+                children: [
+                  Text('40',
+                      style: TextStyle(
+                          color: colorScheme.onSurface
+                              .withOpacity(0.5))),
+                  Expanded(
+                    child: Slider(
+                      value: _bpm.toDouble(),
+                      min: 40,
+                      max: 240,
+                      divisions: 200,
+                      label: '$_bpm BPM',
+                      activeColor: Colors.deepPurple,
+                      onChanged: (value) {
+                        setState(() {
+                          _bpm = value.round();
+                          _bpmController.text = '$_bpm';
+                        });
+                      },
+                      onChangeEnd: (value) {
+                        _updateBpm(value.round());
+                      },
+                    ),
                   ),
+                  Text('240',
+                      style: TextStyle(
+                          color: colorScheme.onSurface
+                              .withOpacity(0.5))),
                 ],
               ),
-            ),
-            const SizedBox(height: 28),
+              const SizedBox(height: 32),
 
-            // --- Play/Stop Button ---
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: _isPlaying ? _stop : _start,
-                icon: Icon(
-                  _isPlaying ? Icons.stop : Icons.play_arrow,
-                  size: 32,
-                ),
-                label: Text(
-                  _isPlaying ? 'Stop' : 'Start',
-                  style: const TextStyle(fontSize: 22),
-                ),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: _isPlaying
-                      ? Colors.red
-                      : Colors.deepPurple,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(30)),
+              // --- Play/Stop Button ---
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isPlaying ? _stop : _start,
+                  icon: Icon(
+                    _isPlaying
+                        ? Icons.stop
+                        : Icons.play_arrow,
+                    size: 36,
+                  ),
+                  label: Text(
+                    _isPlaying ? 'Stop' : 'Start',
+                    style: const TextStyle(fontSize: 24),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: _isPlaying
+                        ? Colors.red
+                        : Colors.deepPurple,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 18),
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(30)),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
-            // --- Tap Tempo ---
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: _tapTempo,
-                icon: const Icon(Icons.touch_app),
-                label: const Text('Tap Tempo',
-                    style: TextStyle(fontSize: 16)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 14),
-                  shape: RoundedRectangleBorder(
-                      borderRadius:
-                          BorderRadius.circular(30)),
+              // --- Tap Tempo ---
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _tapTempo,
+                  icon: const Icon(Icons.touch_app,
+                      size: 22),
+                  label: const Text('Tap Tempo',
+                      style: TextStyle(fontSize: 18)),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 16),
+                    side: const BorderSide(
+                        color: Colors.deepPurple, width: 2),
+                    foregroundColor: Colors.deepPurple,
+                    shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(30)),
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-          ],
+              const SizedBox(height: 24),
+            ],
+          ),
         ),
       ),
     );

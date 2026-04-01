@@ -176,7 +176,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   _MonthStat(
                     label: 'Total Hours',
                     value:
-                        '${(_totalMinutesThisMonth / 60).toStringAsFixed(1)}',
+                        (_totalMinutesThisMonth / 60).toStringAsFixed(1),
                     icon: Icons.star,
                   ),
                 ],

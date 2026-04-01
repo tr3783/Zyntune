@@ -213,7 +213,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    value: _selectedInstrument,
+                    initialValue: _selectedInstrument,
                     decoration: const InputDecoration(
                       labelText: 'Your Instrument',
                       border: OutlineInputBorder(),
@@ -272,7 +272,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         value: _reminderEnabled,
                         onChanged: (val) => setState(
                             () => _reminderEnabled = val),
-                        activeColor: colorScheme.primary,
+                        activeThumbColor: colorScheme.primary,
                       ),
                     ],
                   ),
@@ -380,7 +380,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       PracticePilotApp.of(context)
                           ?.toggleTheme();
                     },
-                    activeColor: colorScheme.primary,
+                    activeThumbColor: colorScheme.primary,
                   ),
                 ],
               ),
@@ -401,14 +401,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     colorScheme.onSurface.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: Column(
+              child: const Column(
                 children: [
                   _SettingsRow(
                     icon: Icons.music_note,
                     label: 'Practice Pilot',
                     value: 'Version 1.0.0',
                   ),
-                  const Divider(),
+                  Divider(),
                   _SettingsRow(
                     icon: Icons.info_outline,
                     label: 'Built with Flutter',
