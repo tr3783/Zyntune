@@ -39,6 +39,9 @@ flutter_launcher_icons:
 flutter_native_splash:
   color: "#6200EA"
   color_dark: "#6200EA"
+  image: assets/icon/icon.png
+  android_gravity: center
+  ios_content_mode: center
   android: true
   ios: true
   fullscreen: true
