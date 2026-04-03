@@ -293,7 +293,7 @@ class _HomeScreenState extends State<HomeScreen> {
           IconButton(
             icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
             onPressed: () =>
-                PracticePilotApp.of(context)?.toggleTheme(),
+                ZyntuneApp.of(context)?.toggleTheme(),
           ),
         ],
       ),

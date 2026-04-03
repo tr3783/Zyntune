@@ -57,7 +57,7 @@ class _TunerScreenState extends State<TunerScreen> {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Microphone permission denied. Go to Settings → Practice Pilot → Microphone.',
+                'Microphone permission denied. Go to Settings → Zyntune → Microphone.'
               ),
               backgroundColor: Colors.red,
               duration: Duration(seconds: 4),
