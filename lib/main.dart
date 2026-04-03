@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'notification_helper.dart';
+import 'metronome_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -11,9 +12,10 @@ void main() async {
   final onboardingComplete =
       prefs.getBool('onboardingComplete') ?? false;
 
-  // Initialize notifications
-  await NotificationHelper.initialize();
+  // Initialize metronome service at app start
+  MetronomeService();
 
+  await NotificationHelper.initialize();
   runApp(PracticePilotApp(
     isDarkMode: isDarkMode,
     onboardingComplete: onboardingComplete,
@@ -23,7 +25,6 @@ void main() async {
 class PracticePilotApp extends StatefulWidget {
   final bool isDarkMode;
   final bool onboardingComplete;
-
   const PracticePilotApp({
     super.key,
     required this.isDarkMode,
@@ -37,7 +38,8 @@ class PracticePilotApp extends StatefulWidget {
   State<PracticePilotApp> createState() => _PracticePilotAppState();
 }
 
-class _PracticePilotAppState extends State<PracticePilotApp> {
+class _PracticePilotAppState extends State<PracticePilotApp>
+    with WidgetsBindingObserver {
   late bool _isDarkMode;
   late bool _onboardingComplete;
 
@@ -46,6 +48,21 @@ class _PracticePilotAppState extends State<PracticePilotApp> {
     super.initState();
     _isDarkMode = widget.isDarkMode;
     _onboardingComplete = widget.onboardingComplete;
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Stop metronome if app goes to background
+    if (state == AppLifecycleState.paused) {
+      MetronomeService().stop();
+    }
   }
 
   void toggleTheme() async {

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:async';
 import 'dart:convert';
 import '../streak_helper.dart';
 import '../timer_service.dart';
@@ -44,16 +43,8 @@ class TimerScreen extends StatefulWidget {
 
 class _TimerScreenState extends State<TimerScreen> {
   final _timerService = TimerService();
-
-  int _countdownTotal = 0;
-  int _countdownRemaining = 0;
-  bool _countdownActive = false;
-  bool _countdownFinished = false;
-  Timer? _countdownTimer;
-
   final List<int> _presets = [5, 10, 15, 20, 30, 45, 60];
   int _selectedPreset = 15;
-
   final TextEditingController _notesController =
       TextEditingController();
   List<PracticeSession> _sessions = [];
@@ -62,80 +53,38 @@ class _TimerScreenState extends State<TimerScreen> {
   void initState() {
     super.initState();
     _loadSessions();
-    _countdownTotal = _selectedPreset * 60;
-    _countdownRemaining = _countdownTotal;
     _timerService.addListener(_onTimerUpdate);
   }
 
   void _onTimerUpdate() {
     if (mounted) setState(() {});
+    // Show finished dialog when countdown completes
+    if (_timerService.countdownFinished &&
+        !_timerService.countdownActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _timerService.countdownFinished) {
+          _showCountdownFinishedDialog();
+          _timerService.countdownFinished = false;
+        }
+      });
+    }
   }
 
   @override
   void dispose() {
     _timerService.removeListener(_onTimerUpdate);
-    _countdownTimer?.cancel();
     _notesController.dispose();
     super.dispose();
   }
 
   void _startStopwatch() => _timerService.start();
   void _pauseStopwatch() => _timerService.pause();
+  void _resetStopwatch() => _timerService.reset();
 
   void _stopStopwatch() async {
     _timerService.stop();
     if (_timerService.elapsed > 0) await _showSaveDialog();
     _timerService.reset();
-  }
-
-  void _resetStopwatch() => _timerService.reset();
-
-  void _startCountdown() {
-    if (_countdownRemaining <= 0) {
-      _countdownRemaining = _countdownTotal;
-    }
-    setState(() {
-      _countdownActive = true;
-      _countdownFinished = false;
-    });
-    _countdownTimer =
-        Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (_countdownRemaining <= 1) {
-        timer.cancel();
-        setState(() {
-          _countdownRemaining = 0;
-          _countdownActive = false;
-          _countdownFinished = true;
-        });
-        _showCountdownFinishedDialog();
-      } else {
-        setState(() => _countdownRemaining--);
-      }
-    });
-  }
-
-  void _pauseCountdown() {
-    _countdownTimer?.cancel();
-    setState(() => _countdownActive = false);
-  }
-
-  void _resetCountdown() {
-    _countdownTimer?.cancel();
-    setState(() {
-      _countdownActive = false;
-      _countdownFinished = false;
-      _countdownRemaining = _countdownTotal;
-    });
-  }
-
-  void _setCountdownDuration(int minutes) {
-    _countdownTimer?.cancel();
-    setState(() {
-      _countdownTotal = minutes * 60;
-      _countdownRemaining = _countdownTotal;
-      _countdownActive = false;
-      _countdownFinished = false;
-    });
   }
 
   void _showCountdownFinishedDialog() {
@@ -150,7 +99,7 @@ class _TimerScreenState extends State<TimerScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              _resetCountdown();
+              _timerService.resetCountdown();
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.teal,
@@ -204,7 +153,8 @@ class _TimerScreenState extends State<TimerScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('Duration: ${_formatTime(_timerService.elapsed)}'),
+            Text(
+                'Duration: ${_formatTime(_timerService.elapsed)}'),
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
@@ -247,11 +197,10 @@ class _TimerScreenState extends State<TimerScreen> {
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text(
-              session.date,
-              style: TextStyle(
-                  fontSize: 12, color: Colors.grey.shade500),
-            ),
+            Text(session.date,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade500)),
             const SizedBox(height: 12),
             TextField(
               controller: editMinutesController,
@@ -328,10 +277,9 @@ class _TimerScreenState extends State<TimerScreen> {
         ],
       ),
     );
-
     if (confirm == true) {
-      setState(
-          () => _sessions.removeWhere((s) => s.id == session.id));
+      setState(() =>
+          _sessions.removeWhere((s) => s.id == session.id));
       await _saveSessions();
     }
   }
@@ -345,17 +293,16 @@ class _TimerScreenState extends State<TimerScreen> {
         '${seconds.toString().padLeft(2, '0')}';
   }
 
-  double get _countdownProgress {
-    if (_countdownTotal == 0) return 0;
-    return _countdownRemaining / _countdownTotal;
-  }
-
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final elapsed = _timerService.elapsed;
     final isRunning = _timerService.isRunning;
     final isPaused = _timerService.isPaused;
+    final countdownActive = _timerService.countdownActive;
+    final countdownFinished = _timerService.countdownFinished;
+    final countdownRemaining = _timerService.countdownRemaining;
+    final countdownProgress = _timerService.countdownProgress;
 
     return Scaffold(
       appBar: AppBar(
@@ -483,7 +430,8 @@ class _TimerScreenState extends State<TimerScreen> {
                       onSelected: (_) {
                         setState(
                             () => _selectedPreset = min);
-                        _setCountdownDuration(min);
+                        _timerService
+                            .setCountdownDuration(min);
                       },
                     ),
                   );
@@ -511,7 +459,8 @@ class _TimerScreenState extends State<TimerScreen> {
                       if (mins != null && mins > 0) {
                         setState(
                             () => _selectedPreset = -1);
-                        _setCountdownDuration(mins);
+                        _timerService
+                            .setCountdownDuration(mins);
                       }
                     },
                   ),
@@ -526,12 +475,12 @@ class _TimerScreenState extends State<TimerScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: _countdownFinished
+                color: countdownFinished
                     ? Colors.green.withOpacity(0.1)
                     : Colors.orange.withOpacity(0.1),
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: _countdownFinished
+                  color: countdownFinished
                       ? Colors.green.withOpacity(0.4)
                       : Colors.orange.withOpacity(0.4),
                   width: 2,
@@ -546,22 +495,22 @@ class _TimerScreenState extends State<TimerScreen> {
                         width: 130,
                         height: 130,
                         child: CircularProgressIndicator(
-                          value: _countdownProgress,
+                          value: countdownProgress,
                           strokeWidth: 10,
                           backgroundColor:
                               Colors.orange.withOpacity(0.2),
                           valueColor:
                               AlwaysStoppedAnimation<Color>(
-                            _countdownFinished
+                            countdownFinished
                                 ? Colors.green
                                 : Colors.orange,
                           ),
                         ),
                       ),
                       Text(
-                        _countdownFinished
+                        countdownFinished
                             ? 'Done!'
-                            : _formatTime(_countdownRemaining),
+                            : _formatTime(countdownRemaining),
                         style: const TextStyle(
                           fontSize: 24,
                           fontWeight: FontWeight.bold,
@@ -574,17 +523,16 @@ class _TimerScreenState extends State<TimerScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: _countdownActive
-                          ? _pauseCountdown
-                          : _startCountdown,
-                      icon: Icon(_countdownActive
+                      onPressed: countdownActive
+                          ? _timerService.pauseCountdown
+                          : _timerService.startCountdown,
+                      icon: Icon(countdownActive
                           ? Icons.pause
                           : Icons.play_arrow),
-                      label: Text(_countdownActive
-                          ? 'Pause'
-                          : 'Start'),
+                      label: Text(
+                          countdownActive ? 'Pause' : 'Start'),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _countdownActive
+                        backgroundColor: countdownActive
                             ? Colors.orange
                             : Colors.teal,
                         foregroundColor: Colors.white,
@@ -598,7 +546,7 @@ class _TimerScreenState extends State<TimerScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: _resetCountdown,
+                      onPressed: _timerService.resetCountdown,
                       icon: const Icon(Icons.refresh),
                       label: const Text('Reset'),
                       style: OutlinedButton.styleFrom(
