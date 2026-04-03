@@ -58,7 +58,6 @@ class _TimerScreenState extends State<TimerScreen> {
 
   void _onTimerUpdate() {
     if (mounted) setState(() {});
-    // Show finished dialog when countdown completes
     if (_timerService.countdownFinished &&
         !_timerService.countdownActive) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -310,369 +309,387 @@ class _TimerScreenState extends State<TimerScreen> {
             style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: colorScheme.inversePrimary,
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
 
-            // --- STOPWATCH ---
-            Text('Stopwatch',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary)),
-            const SizedBox(height: 12),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: Colors.teal.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: Colors.teal.withOpacity(0.4),
-                    width: 2),
-              ),
-              child: Column(
-                children: [
-                  Text(
-                    _formatTime(elapsed),
-                    style: const TextStyle(
-                      fontSize: 52,
+              // --- STOPWATCH ---
+              Text('Stopwatch',
+                  style: TextStyle(
+                      fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: isRunning
-                          ? _pauseStopwatch
-                          : _startStopwatch,
-                      icon: Icon(isRunning
-                          ? Icons.pause
-                          : Icons.play_arrow),
-                      label:
-                          Text(isRunning ? 'Pause' : 'Start'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: isRunning
-                            ? Colors.orange
-                            : Colors.teal,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(16)),
+                      color: colorScheme.primary)),
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.teal.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: Colors.teal.withOpacity(0.4),
+                      width: 2),
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      _formatTime(elapsed),
+                      style: const TextStyle(
+                        fontSize: 52,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'monospace',
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: ElevatedButton.icon(
-                          onPressed: (isRunning || isPaused)
-                              ? _stopStopwatch
-                              : null,
-                          icon: const Icon(Icons.stop),
-                          label: const Text('Stop & Save'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: Colors.red,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                        16)),
-                          ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: isRunning
+                            ? _pauseStopwatch
+                            : _startStopwatch,
+                        icon: Icon(isRunning
+                            ? Icons.pause
+                            : Icons.play_arrow),
+                        label: Text(
+                            isRunning ? 'Pause' : 'Start'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: isRunning
+                              ? Colors.orange
+                              : Colors.teal,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(16)),
                         ),
                       ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: OutlinedButton.icon(
-                          onPressed: _resetStopwatch,
-                          icon: const Icon(Icons.refresh),
-                          label: const Text('Reset'),
-                          style: OutlinedButton.styleFrom(
-                            shape: RoundedRectangleBorder(
-                                borderRadius:
-                                    BorderRadius.circular(
-                                        16)),
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed:
+                                (isRunning || isPaused)
+                                    ? _stopStopwatch
+                                    : null,
+                            icon: const Icon(Icons.stop),
+                            label:
+                                const Text('Stop & Save'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.red,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                          16)),
+                            ),
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ],
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: _resetStopwatch,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Reset'),
+                            style: OutlinedButton.styleFrom(
+                              shape: RoundedRectangleBorder(
+                                  borderRadius:
+                                      BorderRadius.circular(
+                                          16)),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 24),
 
-            // --- COUNTDOWN ---
-            Text('Countdown Timer',
-                style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary)),
-            const SizedBox(height: 12),
+              // --- COUNTDOWN ---
+              Text('Countdown Timer',
+                  style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary)),
+              const SizedBox(height: 12),
 
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(
-                children: _presets.map((min) {
-                  final isSelected = _selectedPreset == min;
-                  return Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: ChoiceChip(
-                      label: Text('$min min'),
-                      selected: isSelected,
-                      selectedColor:
-                          Colors.teal.withOpacity(0.3),
-                      onSelected: (_) {
-                        setState(
-                            () => _selectedPreset = min);
-                        _timerService
-                            .setCountdownDuration(min);
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: _presets.map((min) {
+                    final isSelected =
+                        _selectedPreset == min;
+                    return Padding(
+                      padding:
+                          const EdgeInsets.only(right: 8),
+                      child: ChoiceChip(
+                        label: Text('$min min'),
+                        selected: isSelected,
+                        selectedColor:
+                            Colors.teal.withOpacity(0.3),
+                        onSelected: (_) {
+                          setState(
+                              () => _selectedPreset = min);
+                          _timerService
+                              .setCountdownDuration(min);
+                        },
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+
+              Row(
+                children: [
+                  const Text('Custom: ',
+                      style: TextStyle(fontSize: 15)),
+                  SizedBox(
+                    width: 70,
+                    child: TextField(
+                      keyboardType: TextInputType.number,
+                      textInputAction: TextInputAction.done,
+                      decoration: const InputDecoration(
+                        hintText: 'min',
+                        border: OutlineInputBorder(),
+                        contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 8),
+                      ),
+                      onSubmitted: (val) {
+                        final mins = int.tryParse(val);
+                        if (mins != null && mins > 0) {
+                          setState(
+                              () => _selectedPreset = -1);
+                          _timerService
+                              .setCountdownDuration(mins);
+                          FocusScope.of(context).unfocus();
+                        }
+                      },
+                      onTapOutside: (_) {
+                        FocusScope.of(context).unfocus();
                       },
                     ),
-                  );
-                }).toList(),
+                  ),
+                  const Text(' minutes',
+                      style: TextStyle(fontSize: 15)),
+                ],
               ),
-            ),
-            const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-            Row(
-              children: [
-                const Text('Custom: ',
-                    style: TextStyle(fontSize: 15)),
-                SizedBox(
-                  width: 70,
-                  child: TextField(
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      hintText: 'min',
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 8),
-                    ),
-                    onSubmitted: (val) {
-                      final mins = int.tryParse(val);
-                      if (mins != null && mins > 0) {
-                        setState(
-                            () => _selectedPreset = -1);
-                        _timerService
-                            .setCountdownDuration(mins);
-                      }
-                    },
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: countdownFinished
+                      ? Colors.green.withOpacity(0.1)
+                      : Colors.orange.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: countdownFinished
+                        ? Colors.green.withOpacity(0.4)
+                        : Colors.orange.withOpacity(0.4),
+                    width: 2,
                   ),
                 ),
-                const Text(' minutes',
-                    style: TextStyle(fontSize: 15)),
-              ],
-            ),
-            const SizedBox(height: 16),
-
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: countdownFinished
-                    ? Colors.green.withOpacity(0.1)
-                    : Colors.orange.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: countdownFinished
-                      ? Colors.green.withOpacity(0.4)
-                      : Colors.orange.withOpacity(0.4),
-                  width: 2,
-                ),
-              ),
-              child: Column(
-                children: [
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 130,
-                        height: 130,
-                        child: CircularProgressIndicator(
-                          value: countdownProgress,
-                          strokeWidth: 10,
-                          backgroundColor:
-                              Colors.orange.withOpacity(0.2),
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(
-                            countdownFinished
-                                ? Colors.green
-                                : Colors.orange,
+                child: Column(
+                  children: [
+                    Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: 130,
+                          height: 130,
+                          child: CircularProgressIndicator(
+                            value: countdownProgress,
+                            strokeWidth: 10,
+                            backgroundColor:
+                                Colors.orange.withOpacity(0.2),
+                            valueColor:
+                                AlwaysStoppedAnimation<Color>(
+                              countdownFinished
+                                  ? Colors.green
+                                  : Colors.orange,
+                            ),
                           ),
                         ),
-                      ),
-                      Text(
-                        countdownFinished
-                            ? 'Done!'
-                            : _formatTime(countdownRemaining),
-                        style: const TextStyle(
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                          fontFamily: 'monospace',
+                        Text(
+                          countdownFinished
+                              ? 'Done!'
+                              : _formatTime(
+                                  countdownRemaining),
+                          style: const TextStyle(
+                            fontSize: 24,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        onPressed: countdownActive
+                            ? _timerService.pauseCountdown
+                            : _timerService.startCountdown,
+                        icon: Icon(countdownActive
+                            ? Icons.pause
+                            : Icons.play_arrow),
+                        label: Text(countdownActive
+                            ? 'Pause'
+                            : 'Start'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: countdownActive
+                              ? Colors.orange
+                              : Colors.teal,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(16)),
                         ),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: countdownActive
-                          ? _timerService.pauseCountdown
-                          : _timerService.startCountdown,
-                      icon: Icon(countdownActive
-                          ? Icons.pause
-                          : Icons.play_arrow),
-                      label: Text(
-                          countdownActive ? 'Pause' : 'Start'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: countdownActive
-                            ? Colors.orange
-                            : Colors.teal,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(16)),
+                    ),
+                    const SizedBox(height: 8),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed:
+                            _timerService.resetCountdown,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Reset'),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                              borderRadius:
+                                  BorderRadius.circular(16)),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: _timerService.resetCountdown,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Reset'),
-                      style: OutlinedButton.styleFrom(
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(16)),
-                      ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // --- Recent Sessions ---
+              Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                children: [
+                  Text('Recent Sessions',
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.primary)),
+                  Text(
+                    'Swipe to delete • Tap to edit',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: colorScheme.onSurface
+                          .withOpacity(0.4),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 24),
+              const SizedBox(height: 12),
 
-            // --- Recent Sessions ---
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Recent Sessions',
-                    style: TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: colorScheme.primary)),
-                Text(
-                  'Swipe to delete • Tap to edit',
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: colorScheme.onSurface
-                        .withOpacity(0.4),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            _sessions.isEmpty
-                ? Center(
-                    child: Text(
-                      'No sessions yet.\nStart practicing!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: colorScheme.onSurface
-                            .withOpacity(0.5),
-                        fontSize: 16,
+              _sessions.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No sessions yet.\nStart practicing!',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          color: colorScheme.onSurface
+                              .withOpacity(0.5),
+                          fontSize: 16,
+                        ),
                       ),
+                    )
+                  : ListView.builder(
+                      shrinkWrap: true,
+                      physics:
+                          const NeverScrollableScrollPhysics(),
+                      itemCount: _sessions.length,
+                      itemBuilder: (context, index) {
+                        final session = _sessions[index];
+                        return Dismissible(
+                          key: Key(session.id),
+                          direction:
+                              DismissDirection.endToStart,
+                          background: Container(
+                            alignment:
+                                Alignment.centerRight,
+                            padding: const EdgeInsets.only(
+                                right: 20),
+                            decoration: BoxDecoration(
+                              color: Colors.red,
+                              borderRadius:
+                                  BorderRadius.circular(12),
+                            ),
+                            child: const Icon(Icons.delete,
+                                color: Colors.white),
+                          ),
+                          onDismissed: (_) =>
+                              _deleteSession(session),
+                          child: Card(
+                            margin: const EdgeInsets.only(
+                                bottom: 8),
+                            child: ListTile(
+                              onTap: () =>
+                                  _showEditDialog(session),
+                              leading: const CircleAvatar(
+                                backgroundColor: Colors.teal,
+                                child: Icon(
+                                    Icons.music_note,
+                                    color: Colors.white,
+                                    size: 18),
+                              ),
+                              title: Text(
+                                '${session.durationMinutes} min',
+                                style: const TextStyle(
+                                    fontWeight:
+                                        FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                session.notes.isEmpty
+                                    ? session.date
+                                    : '${session.date} • ${session.notes}',
+                              ),
+                              trailing: Row(
+                                mainAxisSize:
+                                    MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.edit_outlined,
+                                        size: 18,
+                                        color: Colors.teal),
+                                    onPressed: () =>
+                                        _showEditDialog(
+                                            session),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 18,
+                                        color: Colors.red),
+                                    onPressed: () =>
+                                        _deleteSession(
+                                            session),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics:
-                        const NeverScrollableScrollPhysics(),
-                    itemCount: _sessions.length,
-                    itemBuilder: (context, index) {
-                      final session = _sessions[index];
-                      return Dismissible(
-                        key: Key(session.id),
-                        direction:
-                            DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(
-                              right: 20),
-                          decoration: BoxDecoration(
-                            color: Colors.red,
-                            borderRadius:
-                                BorderRadius.circular(12),
-                          ),
-                          child: const Icon(Icons.delete,
-                              color: Colors.white),
-                        ),
-                        onDismissed: (_) =>
-                            _deleteSession(session),
-                        child: Card(
-                          margin: const EdgeInsets.only(
-                              bottom: 8),
-                          child: ListTile(
-                            onTap: () =>
-                                _showEditDialog(session),
-                            leading: const CircleAvatar(
-                              backgroundColor: Colors.teal,
-                              child: Icon(Icons.music_note,
-                                  color: Colors.white,
-                                  size: 18),
-                            ),
-                            title: Text(
-                              '${session.durationMinutes} min',
-                              style: const TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold),
-                            ),
-                            subtitle: Text(
-                              session.notes.isEmpty
-                                  ? session.date
-                                  : '${session.date} • ${session.notes}',
-                            ),
-                            trailing: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.edit_outlined,
-                                      size: 18,
-                                      color: Colors.teal),
-                                  onPressed: () =>
-                                      _showEditDialog(
-                                          session),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Colors.red),
-                                  onPressed: () =>
-                                      _deleteSession(
-                                          session),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-            const SizedBox(height: 20),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
