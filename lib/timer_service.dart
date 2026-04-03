@@ -91,7 +91,7 @@ class TimerService extends ChangeNotifier {
 
   Future<void> _playAlertSound() async {
     for (int i = 0; i < 3; i++) {
-      await _alertPlayer.play(AssetSource('audio/click.wav'));
+      await _alertPlayer.play(AssetSource('audio/alert.wav'));
       await Future.delayed(const Duration(milliseconds: 300));
     }
   }
