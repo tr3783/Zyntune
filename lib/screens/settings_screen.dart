@@ -377,8 +377,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     value: _isDarkMode,
                     onChanged: (val) {
                       setState(() => _isDarkMode = val);
-                      PracticePilotApp.of(context)
-                          ?.toggleTheme();
+                      ZyntuneApp.of(context)
+    ?.toggleTheme();
                     },
                     activeThumbColor: colorScheme.primary,
                   ),
@@ -405,7 +405,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 children: [
                   _SettingsRow(
                     icon: Icons.music_note,
-                    label: 'Practice Pilot',
+                    label: 'Zyntune',
                     value: 'Version 1.0.0',
                   ),
                   Divider(),

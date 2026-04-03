@@ -43,38 +43,34 @@ void main() async {
   final onboardingComplete =
       prefs.getBool('onboardingComplete') ?? false;
 
-  // Initialize services at app start
   MetronomeService();
-
-  // Set global countdown finished callback
   TimerService().onCountdownFinished =
       _showGlobalCountdownDialog;
 
   await NotificationHelper.initialize();
-  runApp(PracticePilotApp(
+  runApp(ZyntuneApp(
     isDarkMode: isDarkMode,
     onboardingComplete: onboardingComplete,
   ));
 }
 
-class PracticePilotApp extends StatefulWidget {
+class ZyntuneApp extends StatefulWidget {
   final bool isDarkMode;
   final bool onboardingComplete;
-  const PracticePilotApp({
+  const ZyntuneApp({
     super.key,
     required this.isDarkMode,
     required this.onboardingComplete,
   });
 
-  static _PracticePilotAppState? of(BuildContext context) =>
-      context.findAncestorStateOfType<_PracticePilotAppState>();
+  static _ZyntuneAppState? of(BuildContext context) =>
+      context.findAncestorStateOfType<_ZyntuneAppState>();
 
   @override
-  State<PracticePilotApp> createState() =>
-      _PracticePilotAppState();
+  State<ZyntuneApp> createState() => _ZyntuneAppState();
 }
 
-class _PracticePilotAppState extends State<PracticePilotApp>
+class _ZyntuneAppState extends State<ZyntuneApp>
     with WidgetsBindingObserver {
   late bool _isDarkMode;
   late bool _onboardingComplete;
@@ -109,7 +105,7 @@ class _PracticePilotAppState extends State<PracticePilotApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Practice Pilot',
+      title: 'Zyntune',
       navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
