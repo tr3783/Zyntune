@@ -145,7 +145,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   String _generateShareText() {
     final hours = (_totalMinutes / 60).toStringAsFixed(1);
-    return '''My Practice Pilot Stats 🎵
+    return '''My Zyntune Stats 🎵
 
 Musician: $_userName
 Instrument: $_instrument

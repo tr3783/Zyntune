@@ -24,7 +24,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final List<_OnboardingPage> _pages = [
     const _OnboardingPage(
       emoji: '🎵',
-      title: 'Welcome to\nPractice Pilot',
+      title: 'Welcome to\nZyntune',
       subtitle:
           'Your personal music practice assistant. Track sessions, set goals, and grow as a musician.',
       color: Colors.deepPurple,
