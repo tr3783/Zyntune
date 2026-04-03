@@ -47,6 +47,8 @@ class _TimerScreenState extends State<TimerScreen> {
   int _selectedPreset = 15;
   final TextEditingController _notesController =
       TextEditingController();
+  final TextEditingController _customMinutesController =
+      TextEditingController();
   List<PracticeSession> _sessions = [];
 
   @override
@@ -58,21 +60,13 @@ class _TimerScreenState extends State<TimerScreen> {
 
   void _onTimerUpdate() {
     if (mounted) setState(() {});
-    if (_timerService.countdownFinished &&
-        !_timerService.countdownActive) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _timerService.countdownFinished) {
-          _showCountdownFinishedDialog();
-          _timerService.countdownFinished = false;
-        }
-      });
-    }
   }
 
   @override
   void dispose() {
     _timerService.removeListener(_onTimerUpdate);
     _notesController.dispose();
+    _customMinutesController.dispose();
     super.dispose();
   }
 
@@ -84,31 +78,6 @@ class _TimerScreenState extends State<TimerScreen> {
     _timerService.stop();
     if (_timerService.elapsed > 0) await _showSaveDialog();
     _timerService.reset();
-  }
-
-  void _showCountdownFinishedDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        title: const Text('Time\'s Up!'),
-        content: const Text(
-            'Your practice session is complete! Great work!'),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _timerService.resetCountdown();
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.teal,
-              foregroundColor: Colors.white,
-            ),
-            child: const Text('Done!'),
-          ),
-        ],
-      ),
-    );
   }
 
   Future<void> _loadSessions() async {
@@ -452,6 +421,7 @@ class _TimerScreenState extends State<TimerScreen> {
                   SizedBox(
                     width: 70,
                     child: TextField(
+                      controller: _customMinutesController,
                       keyboardType: TextInputType.number,
                       textInputAction: TextInputAction.done,
                       decoration: const InputDecoration(
@@ -471,6 +441,14 @@ class _TimerScreenState extends State<TimerScreen> {
                         }
                       },
                       onTapOutside: (_) {
+                        final mins = int.tryParse(
+                            _customMinutesController.text);
+                        if (mins != null && mins > 0) {
+                          setState(
+                              () => _selectedPreset = -1);
+                          _timerService
+                              .setCountdownDuration(mins);
+                        }
                         FocusScope.of(context).unfocus();
                       },
                     ),

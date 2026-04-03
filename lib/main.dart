@@ -4,6 +4,37 @@ import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'notification_helper.dart';
 import 'metronome_service.dart';
+import 'timer_service.dart';
+
+final GlobalKey<NavigatorState> navigatorKey =
+    GlobalKey<NavigatorState>();
+
+void _showGlobalCountdownDialog() {
+  final context = navigatorKey.currentContext;
+  if (context == null) return;
+  showDialog(
+    context: context,
+    barrierDismissible: false,
+    builder: (context) => AlertDialog(
+      title: const Text('Time\'s Up! ⏰'),
+      content: const Text(
+          'Your practice session is complete! Great work!'),
+      actions: [
+        ElevatedButton(
+          onPressed: () {
+            Navigator.pop(context);
+            TimerService().resetCountdown();
+          },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.teal,
+            foregroundColor: Colors.white,
+          ),
+          child: const Text('Done!'),
+        ),
+      ],
+    ),
+  );
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -12,8 +43,12 @@ void main() async {
   final onboardingComplete =
       prefs.getBool('onboardingComplete') ?? false;
 
-  // Initialize metronome service at app start
+  // Initialize services at app start
   MetronomeService();
+
+  // Set global countdown finished callback
+  TimerService().onCountdownFinished =
+      _showGlobalCountdownDialog;
 
   await NotificationHelper.initialize();
   runApp(PracticePilotApp(
@@ -35,7 +70,8 @@ class PracticePilotApp extends StatefulWidget {
       context.findAncestorStateOfType<_PracticePilotAppState>();
 
   @override
-  State<PracticePilotApp> createState() => _PracticePilotAppState();
+  State<PracticePilotApp> createState() =>
+      _PracticePilotAppState();
 }
 
 class _PracticePilotAppState extends State<PracticePilotApp>
@@ -59,7 +95,6 @@ class _PracticePilotAppState extends State<PracticePilotApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Stop metronome if app goes to background
     if (state == AppLifecycleState.paused) {
       MetronomeService().stop();
     }
@@ -75,6 +110,7 @@ class _PracticePilotAppState extends State<PracticePilotApp>
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Practice Pilot',
+      navigatorKey: navigatorKey,
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(

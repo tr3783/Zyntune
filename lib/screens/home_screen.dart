@@ -205,7 +205,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 12),
               Text(
                 'Current goal: $tempGoal minutes/day',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
                   color: Colors.teal,
@@ -275,7 +275,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          'Practice Pilot',
+          'Zyntune',
           style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
         ),
         centerTitle: true,
@@ -358,7 +358,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 20),
                       _QuickStat(
                           label: 'Hours',
-                          value: '${(_totalMinutes / 60).toStringAsFixed(1)}',
+                          value: (_totalMinutes / 60).toStringAsFixed(1),
                           icon: Icons.star),
                     ],
                   ),

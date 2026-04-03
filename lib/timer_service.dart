@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 
 class TimerService extends ChangeNotifier {
   static final TimerService _instance = TimerService._internal();
@@ -52,6 +53,7 @@ class TimerService extends ChangeNotifier {
   int countdownRemaining = 15 * 60;
   bool countdownActive = false;
   bool countdownFinished = false;
+  VoidCallback? onCountdownFinished;
 
   void startCountdown() {
     if (countdownRemaining <= 0) {
@@ -69,7 +71,11 @@ class TimerService extends ChangeNotifier {
         countdownRemaining = 0;
         countdownActive = false;
         countdownFinished = true;
+        HapticFeedback.heavyImpact();
         notifyListeners();
+        Future.delayed(Duration.zero, () {
+          onCountdownFinished?.call();
+        });
       } else {
         countdownRemaining--;
         notifyListeners();
