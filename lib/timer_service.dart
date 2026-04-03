@@ -1,11 +1,14 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 class TimerService extends ChangeNotifier {
   static final TimerService _instance = TimerService._internal();
   factory TimerService() => _instance;
   TimerService._internal();
+
+  final AudioPlayer _alertPlayer = AudioPlayer();
 
   // --- Stopwatch ---
   Timer? _stopwatchTimer;
@@ -71,7 +74,10 @@ class TimerService extends ChangeNotifier {
         countdownRemaining = 0;
         countdownActive = false;
         countdownFinished = true;
+        // Vibrate
         HapticFeedback.heavyImpact();
+        // Play alert sound 3 times
+        _playAlertSound();
         notifyListeners();
         Future.delayed(Duration.zero, () {
           onCountdownFinished?.call();
@@ -81,6 +87,13 @@ class TimerService extends ChangeNotifier {
         notifyListeners();
       }
     });
+  }
+
+  Future<void> _playAlertSound() async {
+    for (int i = 0; i < 3; i++) {
+      await _alertPlayer.play(AssetSource('audio/click.wav'));
+      await Future.delayed(const Duration(milliseconds: 300));
+    }
   }
 
   void pauseCountdown() {
