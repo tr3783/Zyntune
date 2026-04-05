@@ -3,7 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 
-class Song {
+class Piece {
   final String id;
   String title;
   String composer;
@@ -12,7 +12,7 @@ class Song {
   String notes;
   String link;
 
-  Song({
+  Piece({
     required this.id,
     required this.title,
     required this.composer,
@@ -32,7 +32,7 @@ class Song {
         'link': link,
       };
 
-  factory Song.fromJson(Map<String, dynamic> json) => Song(
+  factory Piece.fromJson(Map<String, dynamic> json) => Piece(
         id: json['id'],
         title: json['title'],
         composer: json['composer'] ?? '',
@@ -51,13 +51,18 @@ class SongsScreen extends StatefulWidget {
 }
 
 class _SongsScreenState extends State<SongsScreen> {
-  List<Song> _songs = [];
+  List<Piece> _pieces = [];
   String _filterStatus = 'All';
-  final TextEditingController _titleController = TextEditingController();
-  final TextEditingController _composerController = TextEditingController();
-  final TextEditingController _movementsController = TextEditingController();
-  final TextEditingController _notesController = TextEditingController();
-  final TextEditingController _linkController = TextEditingController();
+  final TextEditingController _titleController =
+      TextEditingController();
+  final TextEditingController _composerController =
+      TextEditingController();
+  final TextEditingController _movementsController =
+      TextEditingController();
+  final TextEditingController _notesController =
+      TextEditingController();
+  final TextEditingController _linkController =
+      TextEditingController();
   String _selectedStatus = 'learning';
 
   final Map<String, Color> _statusColors = {
@@ -69,7 +74,7 @@ class _SongsScreenState extends State<SongsScreen> {
   @override
   void initState() {
     super.initState();
-    _loadSongs();
+    _loadPieces();
   }
 
   @override
@@ -82,23 +87,25 @@ class _SongsScreenState extends State<SongsScreen> {
     super.dispose();
   }
 
-  Future<void> _loadSongs() async {
+  Future<void> _loadPieces() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getStringList('songs') ?? [];
     setState(() {
-      _songs = data.map((s) => Song.fromJson(jsonDecode(s))).toList();
+      _pieces =
+          data.map((s) => Piece.fromJson(jsonDecode(s))).toList();
     });
   }
 
-  Future<void> _saveSongs() async {
+  Future<void> _savePieces() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = _songs.map((s) => jsonEncode(s.toJson())).toList();
+    final data =
+        _pieces.map((s) => jsonEncode(s.toJson())).toList();
     await prefs.setStringList('songs', data);
   }
 
-  void _addSong() {
+  void _addPiece() {
     if (_titleController.text.trim().isEmpty) return;
-    final newSong = Song(
+    final newPiece = Piece(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
       composer: _composerController.text.trim(),
@@ -107,8 +114,8 @@ class _SongsScreenState extends State<SongsScreen> {
       notes: _notesController.text.trim(),
       link: _linkController.text.trim(),
     );
-    setState(() => _songs.add(newSong));
-    _saveSongs();
+    setState(() => _pieces.add(newPiece));
+    _savePieces();
     _clearControllers();
     Navigator.pop(context);
   }
@@ -122,27 +129,27 @@ class _SongsScreenState extends State<SongsScreen> {
     _selectedStatus = 'learning';
   }
 
-  void _deleteSong(String id) {
-    setState(() => _songs.removeWhere((s) => s.id == id));
-    _saveSongs();
+  void _deletePiece(String id) {
+    setState(() => _pieces.removeWhere((s) => s.id == id));
+    _savePieces();
   }
 
   void _updateStatus(String id, String newStatus) {
     setState(() {
-      final song = _songs.firstWhere((s) => s.id == id);
-      song.status = newStatus;
+      final piece = _pieces.firstWhere((s) => s.id == id);
+      piece.status = newStatus;
     });
-    _saveSongs();
+    _savePieces();
   }
 
-  List<Song> get _filteredSongs {
-    if (_filterStatus == 'All') return _songs;
-    return _songs.where((s) => s.status == _filterStatus).toList();
+  List<Piece> get _filteredPieces {
+    if (_filterStatus == 'All') return _pieces;
+    return _pieces
+        .where((s) => s.status == _filterStatus)
+        .toList();
   }
 
-  // Launch URL in browser
   Future<void> _launchLink(String url) async {
-    // Add https:// if missing
     final fullUrl =
         url.startsWith('http') ? url : 'https://$url';
     final uri = Uri.parse(fullUrl);
@@ -161,13 +168,13 @@ class _SongsScreenState extends State<SongsScreen> {
     }
   }
 
-  void _showAddSongDialog() {
+  void _showAddPieceDialog() {
     _clearControllers();
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add to Repertoire'),
+          title: const Text('Add Piece to Repertoire'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -198,7 +205,8 @@ class _SongsScreenState extends State<SongsScreen> {
                     labelText: 'Movements / Sections',
                     hintText: 'e.g. I. Adagio, II. Allegretto',
                     border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.format_list_numbered),
+                    prefixIcon:
+                        Icon(Icons.format_list_numbered),
                   ),
                   maxLines: 2,
                 ),
@@ -218,7 +226,8 @@ class _SongsScreenState extends State<SongsScreen> {
                       .toList(),
                   onChanged: (val) {
                     if (val != null) {
-                      setDialogState(() => _selectedStatus = val);
+                      setDialogState(
+                          () => _selectedStatus = val);
                     }
                   },
                 ),
@@ -253,7 +262,7 @@ class _SongsScreenState extends State<SongsScreen> {
               child: const Text('Cancel'),
             ),
             ElevatedButton(
-              onPressed: _addSong,
+              onPressed: _addPiece,
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.pink,
                 foregroundColor: Colors.white,
@@ -266,43 +275,42 @@ class _SongsScreenState extends State<SongsScreen> {
     );
   }
 
-  void _showDetailDialog(Song song) {
+  void _showDetailDialog(Piece piece) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(song.title,
-            style: const TextStyle(fontWeight: FontWeight.bold)),
+        title: Text(piece.title,
+            style:
+                const TextStyle(fontWeight: FontWeight.bold)),
         content: SingleChildScrollView(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              if (song.composer.isNotEmpty)
+              if (piece.composer.isNotEmpty)
                 _DetailRow(
                   icon: Icons.person,
                   label: 'Composer',
-                  value: song.composer,
+                  value: piece.composer,
                 ),
-              if (song.movements.isNotEmpty)
+              if (piece.movements.isNotEmpty)
                 _DetailRow(
                   icon: Icons.format_list_numbered,
                   label: 'Movements',
-                  value: song.movements,
+                  value: piece.movements,
                 ),
               _DetailRow(
                 icon: Icons.flag,
                 label: 'Status',
-                value: song.status.toUpperCase(),
+                value: piece.status.toUpperCase(),
               ),
-              if (song.notes.isNotEmpty)
+              if (piece.notes.isNotEmpty)
                 _DetailRow(
                   icon: Icons.notes,
                   label: 'Notes',
-                  value: song.notes,
+                  value: piece.notes,
                 ),
-
-              // Tappable link row
-              if (song.link.isNotEmpty) ...[
+              if (piece.link.isNotEmpty) ...[
                 const Divider(),
                 const SizedBox(height: 4),
                 Row(
@@ -321,9 +329,9 @@ class _SongsScreenState extends State<SongsScreen> {
                                   color: Colors.grey)),
                           GestureDetector(
                             onTap: () =>
-                                _launchLink(song.link),
+                                _launchLink(piece.link),
                             child: Text(
-                              song.link,
+                              piece.link,
                               style: const TextStyle(
                                 fontSize: 14,
                                 color: Colors.blue,
@@ -337,11 +345,11 @@ class _SongsScreenState extends State<SongsScreen> {
                         ],
                       ),
                     ),
-                    // Open link button
                     IconButton(
                       icon: const Icon(Icons.open_in_new,
                           color: Colors.blue),
-                      onPressed: () => _launchLink(song.link),
+                      onPressed: () =>
+                          _launchLink(piece.link),
                       tooltip: 'Open link',
                     ),
                   ],
@@ -371,7 +379,7 @@ class _SongsScreenState extends State<SongsScreen> {
         backgroundColor: colorScheme.inversePrimary,
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _showAddSongDialog,
+        onPressed: _showAddPieceDialog,
         backgroundColor: Colors.pink,
         child: const Icon(Icons.add, color: Colors.white),
       ),
@@ -382,25 +390,27 @@ class _SongsScreenState extends State<SongsScreen> {
 
             // --- Stats Row ---
             Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceEvenly,
               children: [
                 _StatChip(
                   label: 'Learning',
-                  count: _songs
+                  count: _pieces
                       .where((s) => s.status == 'learning')
                       .length,
                   color: Colors.red,
                 ),
                 _StatChip(
                   label: 'In Progress',
-                  count: _songs
-                      .where((s) => s.status == 'in progress')
+                  count: _pieces
+                      .where(
+                          (s) => s.status == 'in progress')
                       .length,
                   color: Colors.orange,
                 ),
                 _StatChip(
                   label: 'Mastered',
-                  count: _songs
+                  count: _pieces
                       .where((s) => s.status == 'mastered')
                       .length,
                   color: Colors.green,
@@ -420,12 +430,15 @@ class _SongsScreenState extends State<SongsScreen> {
                   'mastered'
                 ]
                     .map((status) => Padding(
-                          padding: const EdgeInsets.only(right: 8),
+                          padding:
+                              const EdgeInsets.only(right: 8),
                           child: FilterChip(
-                            label: Text(status.toUpperCase()),
-                            selected: _filterStatus == status,
-                            onSelected: (_) => setState(
-                                () => _filterStatus = status),
+                            label:
+                                Text(status.toUpperCase()),
+                            selected:
+                                _filterStatus == status,
+                            onSelected: (_) => setState(() =>
+                                _filterStatus = status),
                             selectedColor:
                                 Colors.pink.withOpacity(0.3),
                           ),
@@ -435,12 +448,12 @@ class _SongsScreenState extends State<SongsScreen> {
             ),
             const SizedBox(height: 16),
 
-            // --- Songs List ---
+            // --- Pieces List ---
             Expanded(
-              child: _filteredSongs.isEmpty
+              child: _filteredPieces.isEmpty
                   ? Center(
                       child: Text(
-                        _songs.isEmpty
+                        _pieces.isEmpty
                             ? 'No pieces yet!\nTap + to add to your repertoire 🎼'
                             : 'No pieces with this status.',
                         textAlign: TextAlign.center,
@@ -452,46 +465,49 @@ class _SongsScreenState extends State<SongsScreen> {
                       ),
                     )
                   : ListView.builder(
-                      itemCount: _filteredSongs.length,
+                      itemCount: _filteredPieces.length,
                       itemBuilder: (context, index) {
-                        final song = _filteredSongs[index];
+                        final piece =
+                            _filteredPieces[index];
                         final statusColor =
-                            _statusColors[song.status] ??
+                            _statusColors[piece.status] ??
                                 Colors.grey;
                         return Card(
-                          margin:
-                              const EdgeInsets.only(bottom: 10),
+                          margin: const EdgeInsets.only(
+                              bottom: 10),
                           child: ListTile(
                             onTap: () =>
-                                _showDetailDialog(song),
+                                _showDetailDialog(piece),
                             leading: CircleAvatar(
-                              backgroundColor:
-                                  statusColor.withOpacity(0.2),
+                              backgroundColor: statusColor
+                                  .withOpacity(0.2),
                               child: Icon(Icons.music_note,
                                   color: statusColor),
                             ),
                             title: Text(
-                              song.title,
+                              piece.title,
                               style: const TextStyle(
-                                  fontWeight: FontWeight.bold),
+                                  fontWeight:
+                                      FontWeight.bold),
                             ),
                             subtitle: Text(
-                              song.composer.isEmpty
-                                  ? song.status.toUpperCase()
-                                  : '${song.composer} • ${song.status.toUpperCase()}',
+                              piece.composer.isEmpty
+                                  ? piece.status
+                                      .toUpperCase()
+                                  : '${piece.composer} • ${piece.status.toUpperCase()}',
                             ),
-                            // Show link icon if link exists
                             trailing: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                if (song.link.isNotEmpty)
+                                if (piece.link.isNotEmpty)
                                   IconButton(
                                     icon: const Icon(
                                         Icons.open_in_new,
                                         color: Colors.blue,
                                         size: 20),
                                     onPressed: () =>
-                                        _launchLink(song.link),
+                                        _launchLink(
+                                            piece.link),
                                     tooltip: 'Open link',
                                   ),
                                 PopupMenuButton<String>(
@@ -499,10 +515,11 @@ class _SongsScreenState extends State<SongsScreen> {
                                       Icons.more_vert),
                                   onSelected: (val) {
                                     if (val == 'delete') {
-                                      _deleteSong(song.id);
+                                      _deletePiece(
+                                          piece.id);
                                     } else {
                                       _updateStatus(
-                                          song.id, val);
+                                          piece.id, val);
                                     }
                                   },
                                   itemBuilder: (_) => [

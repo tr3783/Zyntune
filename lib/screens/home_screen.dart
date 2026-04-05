@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import '../main.dart';
 import '../streak_helper.dart';
+import '../practice_objective.dart';
 import 'metronome_screen.dart';
 import 'timer_screen.dart';
 import 'goals_screen.dart';
@@ -30,6 +32,8 @@ class _HomeScreenState extends State<HomeScreen> {
   String _todayDate = '';
   String _userName = 'Musician';
   String _instrument = 'Guitar';
+  List<PracticeObjective> _objectives = [];
+  List<String> _pieceNames = [];
 
   final List<Map<String, dynamic>> _allTips = [
     {'tip': 'Practicing 20 minutes daily is more effective than 2 hours once a week.', 'color': Colors.deepPurple},
@@ -93,7 +97,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final todayStr = DateTime.now().toString().substring(0, 10);
 
     for (final s in data) {
-      final match = RegExp(r'"durationMinutes":(\d+)').firstMatch(s);
+      final match =
+          RegExp(r'"durationMinutes":(\d+)').firstMatch(s);
       final mins = int.tryParse(match?.group(1) ?? '0') ?? 0;
       totalMins += mins;
       if (s.contains(todayStr)) todayMins += mins;
@@ -101,8 +106,27 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final streakData = await StreakHelper.getStreakData();
     final userName = prefs.getString('userName') ?? 'Musician';
-    final instrument = prefs.getString('instrument') ?? 'Guitar';
+    final instrument =
+        prefs.getString('instrument') ?? 'Guitar';
     final dailyGoal = prefs.getInt('dailyGoalMinutes') ?? 30;
+
+    // Load objectives
+    final todayKey = 'objectives_$todayStr';
+    final objData = prefs.getStringList(todayKey) ?? [];
+    final objectives = objData
+        .map((s) => PracticeObjective.fromJsonString(s))
+        .toList();
+
+    // Load piece names from repertoire
+    final piecesData = prefs.getStringList('songs') ?? [];
+    final pieceNames = piecesData.map((s) {
+      try {
+        final map = jsonDecode(s) as Map<String, dynamic>;
+        return map['title'] as String? ?? '';
+      } catch (_) {
+        return '';
+      }
+    }).where((s) => s.isNotEmpty).toList();
 
     setState(() {
       _totalSessions = data.length;
@@ -113,13 +137,201 @@ class _HomeScreenState extends State<HomeScreen> {
       _longestStreak = streakData['longestStreak'] ?? 0;
       _userName = userName;
       _instrument = instrument;
+      _objectives = objectives;
+      _pieceNames = pieceNames.cast<String>();
     });
+  }
+
+  Future<void> _saveObjectives() async {
+    final prefs = await SharedPreferences.getInstance();
+    final todayStr = DateTime.now().toString().substring(0, 10);
+    final todayKey = 'objectives_$todayStr';
+    await prefs.setStringList(todayKey,
+        _objectives.map((o) => o.toJsonString()).toList());
+  }
+
+  void _showAddObjectiveDialog() {
+    String selectedPiece = '';
+    final sectionController = TextEditingController();
+    final checklistController = TextEditingController();
+    List<String> checklistItems = [];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Add Practice Objective'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Piece picker
+                DropdownButtonFormField<String>(
+                  value: selectedPiece.isEmpty
+                      ? null
+                      : selectedPiece,
+                  decoration: const InputDecoration(
+                    labelText: 'Piece (optional)',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.music_note),
+                  ),
+                  hint: const Text('Select a piece'),
+                  items: [
+                    const DropdownMenuItem(
+                        value: '',
+                        child: Text('Free practice')),
+                    ..._pieceNames.map((s) =>
+                        DropdownMenuItem(
+                            value: s, child: Text(s))),
+                  ],
+                  onChanged: (val) => setDialogState(
+                      () => selectedPiece = val ?? ''),
+                ),
+                const SizedBox(height: 12),
+
+                // Section/movement
+                TextField(
+                  controller: sectionController,
+                  decoration: const InputDecoration(
+                    labelText: 'Section / Movement',
+                    hintText: 'e.g. Measures 24-32, Chorus',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.bookmark),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
+                // Checklist items
+                const Text('Checklist Items',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                ...checklistItems.map((item) => Padding(
+                      padding:
+                          const EdgeInsets.only(bottom: 4),
+                      child: Row(
+                        children: [
+                          const Icon(
+                              Icons.check_box_outline_blank,
+                              size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text(item)),
+                          IconButton(
+                            icon: const Icon(Icons.close,
+                                size: 16),
+                            onPressed: () =>
+                                setDialogState(() =>
+                                    checklistItems
+                                        .remove(item)),
+                          ),
+                        ],
+                      ),
+                    )),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: checklistController,
+                        decoration: const InputDecoration(
+                          hintText: 'Add item...',
+                          border: OutlineInputBorder(),
+                          contentPadding:
+                              EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 8),
+                        ),
+                        onSubmitted: (val) {
+                          if (val.trim().isNotEmpty) {
+                            setDialogState(() {
+                              checklistItems.add(val.trim());
+                              checklistController.clear();
+                            });
+                          }
+                        },
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_circle,
+                          color: Colors.deepPurple),
+                      onPressed: () {
+                        if (checklistController.text
+                            .trim()
+                            .isNotEmpty) {
+                          setDialogState(() {
+                            checklistItems.add(
+                                checklistController.text
+                                    .trim());
+                            checklistController.clear();
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final obj = PracticeObjective(
+                  id: DateTime.now()
+                      .millisecondsSinceEpoch
+                      .toString(),
+                  pieceName: selectedPiece,
+                  section: sectionController.text.trim(),
+                  checklistItems: checklistItems
+                      .map((text) => ChecklistItem(
+                            id: DateTime.now()
+                                .millisecondsSinceEpoch
+                                .toString(),
+                            text: text,
+                          ))
+                      .toList(),
+                );
+                setState(() => _objectives.add(obj));
+                _saveObjectives();
+                sectionController.dispose();
+                checklistController.dispose();
+                Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepPurple,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Add'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _toggleChecklistItem(
+      PracticeObjective obj, ChecklistItem item) {
+    setState(() => item.checked = !item.checked);
+    _saveObjectives();
+  }
+
+  void _toggleObjectiveComplete(PracticeObjective obj) {
+    setState(() => obj.completed = !obj.completed);
+    _saveObjectives();
+  }
+
+  void _deleteObjective(PracticeObjective obj) {
+    setState(() => _objectives.remove(obj));
+    _saveObjectives();
   }
 
   void _showSetGoalDialog() {
     int tempGoal = _dailyGoalMinutes;
-    final customController = TextEditingController(
-        text: '$_dailyGoalMinutes');
+    final customController =
+        TextEditingController(text: '$_dailyGoalMinutes');
 
     showDialog(
       context: context,
@@ -129,7 +341,6 @@ class _HomeScreenState extends State<HomeScreen> {
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              // Quick presets
               Wrap(
                 spacing: 8,
                 runSpacing: 8,
@@ -142,18 +353,20 @@ class _HomeScreenState extends State<HomeScreen> {
                             });
                           },
                           child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 8),
+                            padding:
+                                const EdgeInsets.symmetric(
+                                    horizontal: 14,
+                                    vertical: 8),
                             decoration: BoxDecoration(
                               color: tempGoal == min
                                   ? Colors.teal
-                                  : Colors.teal.withOpacity(0.1),
+                                  : Colors.teal
+                                      .withOpacity(0.1),
                               borderRadius:
                                   BorderRadius.circular(20),
                               border: Border.all(
-                                color: Colors.teal
-                                    .withOpacity(0.4),
-                              ),
+                                  color: Colors.teal
+                                      .withOpacity(0.4)),
                             ),
                             child: Text(
                               '$min min',
@@ -169,8 +382,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     .toList(),
               ),
               const SizedBox(height: 20),
-
-              // Custom input
               Row(
                 children: [
                   const Text('Custom: ',
@@ -182,7 +393,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly,
+                        FilteringTextInputFormatter
+                            .digitsOnly,
                         LengthLimitingTextInputFormatter(3),
                       ],
                       decoration: const InputDecoration(
@@ -193,7 +405,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       onChanged: (val) {
                         final mins = int.tryParse(val);
                         if (mins != null && mins > 0) {
-                          setDialogState(() => tempGoal = mins);
+                          setDialogState(
+                              () => tempGoal = mins);
                         }
                       },
                     ),
@@ -224,7 +437,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     await SharedPreferences.getInstance();
                 await prefs.setInt(
                     'dailyGoalMinutes', tempGoal);
-                setState(() => _dailyGoalMinutes = tempGoal);
+                setState(
+                    () => _dailyGoalMinutes = tempGoal);
                 customController.dispose();
                 if (mounted) Navigator.pop(context);
               },
@@ -262,21 +476,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
   double get _dailyProgress {
     if (_dailyGoalMinutes == 0) return 0;
-    return (_todayMinutes / _dailyGoalMinutes).clamp(0.0, 1.0);
+    return (_todayMinutes / _dailyGoalMinutes)
+        .clamp(0.0, 1.0);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
     final tips = _todaysTips;
-    final goalReached = _todayMinutes >= _dailyGoalMinutes;
+    final goalReached =
+        _todayMinutes >= _dailyGoalMinutes;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text(
           'Zyntune',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 22),
+          style: TextStyle(
+              fontWeight: FontWeight.bold, fontSize: 22),
         ),
         centerTitle: true,
         backgroundColor: colorScheme.inversePrimary,
@@ -291,14 +509,16 @@ class _HomeScreenState extends State<HomeScreen> {
             ).then((_) => _loadData()),
           ),
           IconButton(
-            icon: Icon(isDark ? Icons.light_mode : Icons.dark_mode),
+            icon: Icon(
+                isDark ? Icons.light_mode : Icons.dark_mode),
             onPressed: () =>
                 ZyntuneApp.of(context)?.toggleTheme(),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+        padding:
+            const EdgeInsets.fromLTRB(16, 16, 16, 48),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -310,19 +530,27 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [Colors.deepPurple.shade800, Colors.purple.shade900]
-                      : [Colors.deepPurple.shade300, Colors.purple.shade400],
+                      ? [
+                          Colors.deepPurple.shade800,
+                          Colors.purple.shade900
+                        ]
+                      : [
+                          Colors.deepPurple.shade300,
+                          Colors.purple.shade400
+                        ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment:
+                    CrossAxisAlignment.start,
                 children: [
                   Text(_todayDate,
                       style: const TextStyle(
-                          color: Colors.white70, fontSize: 13)),
+                          color: Colors.white70,
+                          fontSize: 13)),
                   const SizedBox(height: 4),
                   Text(
                     'Welcome, $_userName!',
@@ -335,12 +563,15 @@ class _HomeScreenState extends State<HomeScreen> {
                   const SizedBox(height: 4),
                   Row(
                     children: [
-                      Icon(_getInstrumentIcon(_instrument),
-                          color: Colors.white70, size: 14),
+                      Icon(
+                          _getInstrumentIcon(_instrument),
+                          color: Colors.white70,
+                          size: 14),
                       const SizedBox(width: 4),
                       Text(_instrument,
                           style: const TextStyle(
-                              color: Colors.white70, fontSize: 13)),
+                              color: Colors.white70,
+                              fontSize: 13)),
                     ],
                   ),
                   const SizedBox(height: 14),
@@ -358,7 +589,8 @@ class _HomeScreenState extends State<HomeScreen> {
                       const SizedBox(width: 20),
                       _QuickStat(
                           label: 'Hours',
-                          value: (_totalMinutes / 60).toStringAsFixed(1),
+                          value: (_totalMinutes / 60)
+                              .toStringAsFixed(1),
                           icon: Icons.star),
                     ],
                   ),
@@ -396,8 +628,8 @@ class _HomeScreenState extends State<HomeScreen> {
                           CircularProgressIndicator(
                             value: _dailyProgress,
                             strokeWidth: 8,
-                            backgroundColor:
-                                Colors.teal.withOpacity(0.2),
+                            backgroundColor: Colors.teal
+                                .withOpacity(0.2),
                             color: goalReached
                                 ? Colors.green
                                 : Colors.teal,
@@ -407,7 +639,8 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ? 'Done!'
                                 : '${(_dailyProgress * 100).round()}%',
                             style: TextStyle(
-                              fontSize: goalReached ? 10 : 12,
+                              fontSize:
+                                  goalReached ? 10 : 12,
                               fontWeight: FontWeight.bold,
                               color: goalReached
                                   ? Colors.green
@@ -449,24 +682,93 @@ class _HomeScreenState extends State<HomeScreen> {
                             Text(
                               '${_dailyGoalMinutes - _todayMinutes} min remaining',
                               style: const TextStyle(
-                                  fontSize: 12, color: Colors.teal),
+                                  fontSize: 12,
+                                  color: Colors.teal),
                             ),
                           if (goalReached)
                             const Text(
                               'Amazing work today!',
                               style: TextStyle(
-                                  fontSize: 12, color: Colors.green),
+                                  fontSize: 12,
+                                  color: Colors.green),
                             ),
                         ],
                       ),
                     ),
                     Icon(Icons.edit,
                         size: 16,
-                        color: colorScheme.onSurface.withOpacity(0.3)),
+                        color: colorScheme.onSurface
+                            .withOpacity(0.3)),
                   ],
                 ),
               ),
             ),
+            const SizedBox(height: 12),
+
+            // --- Today's Objectives ---
+            Row(
+              mainAxisAlignment:
+                  MainAxisAlignment.spaceBetween,
+              children: [
+                Text("Today's Objectives",
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.bold,
+                      color: colorScheme.primary,
+                    )),
+                TextButton.icon(
+                  onPressed: _showAddObjectiveDialog,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Add'),
+                  style: TextButton.styleFrom(
+                    foregroundColor: Colors.deepPurple,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            if (_objectives.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color:
+                      Colors.deepPurple.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                      color: Colors.deepPurple
+                          .withOpacity(0.2)),
+                ),
+                child: Column(
+                  children: [
+                    Icon(Icons.playlist_add,
+                        size: 36,
+                        color: Colors.deepPurple
+                            .withOpacity(0.4)),
+                    const SizedBox(height: 8),
+                    Text(
+                      'No objectives yet.\nTap Add to set what you want to work on today!',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: colorScheme.onSurface
+                            .withOpacity(0.5),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._objectives.map((obj) => _ObjectiveCard(
+                    objective: obj,
+                    onToggleComplete: () =>
+                        _toggleObjectiveComplete(obj),
+                    onToggleItem: (item) =>
+                        _toggleChecklistItem(obj, item),
+                    onDelete: () => _deleteObjective(obj),
+                  )),
+
             const SizedBox(height: 12),
 
             // --- Streak Card ---
@@ -476,10 +778,14 @@ class _HomeScreenState extends State<HomeScreen> {
               decoration: BoxDecoration(
                 gradient: LinearGradient(
                   colors: isDark
-                      ? [Colors.orange.shade800,
-                          Colors.deepOrange.shade900]
-                      : [Colors.orange.shade300,
-                          Colors.deepOrange.shade400],
+                      ? [
+                          Colors.orange.shade800,
+                          Colors.deepOrange.shade900
+                        ]
+                      : [
+                          Colors.orange.shade300,
+                          Colors.deepOrange.shade400
+                        ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -510,8 +816,8 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                             ),
                             const Padding(
-                              padding:
-                                  EdgeInsets.only(bottom: 6),
+                              padding: EdgeInsets.only(
+                                  bottom: 6),
                               child: Text(' days',
                                   style: TextStyle(
                                       color: Colors.white70,
@@ -536,7 +842,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius:
+                          BorderRadius.circular(14),
                     ),
                     child: Column(
                       children: [
@@ -589,8 +896,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Timer',
                     subtitle: 'Track sessions',
                     color: Colors.teal,
-                    onTap: () =>
-                        _navigate(context, const TimerScreen()),
+                    onTap: () => _navigate(
+                        context, const TimerScreen()),
                   ),
                 ),
               ],
@@ -605,8 +912,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Goals',
                     subtitle: 'Daily targets',
                     color: Colors.orange,
-                    onTap: () =>
-                        _navigate(context, const GoalsScreen()),
+                    onTap: () => _navigate(
+                        context, const GoalsScreen()),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -616,8 +923,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Repertoire',
                     subtitle: 'My pieces',
                     color: Colors.pink,
-                    onTap: () =>
-                        _navigate(context, const SongsScreen()),
+                    onTap: () => _navigate(
+                        context, const SongsScreen()),
                   ),
                 ),
               ],
@@ -632,8 +939,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Stats',
                     subtitle: 'Progress charts',
                     color: Colors.blue,
-                    onTap: () =>
-                        _navigate(context, const StatsScreen()),
+                    onTap: () => _navigate(
+                        context, const StatsScreen()),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -643,8 +950,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Tuner',
                     subtitle: 'Check pitch',
                     color: Colors.green,
-                    onTap: () =>
-                        _navigate(context, const TunerScreen()),
+                    onTap: () => _navigate(
+                        context, const TunerScreen()),
                   ),
                 ),
               ],
@@ -659,8 +966,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     label: 'Lesson Notes',
                     subtitle: 'Quick scratchpad',
                     color: Colors.indigo,
-                    onTap: () =>
-                        _navigate(context, const NotesScreen()),
+                    onTap: () => _navigate(
+                        context, const NotesScreen()),
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -698,11 +1005,17 @@ class _HomeScreenState extends State<HomeScreen> {
               ],
             ),
             const SizedBox(height: 10),
-            _TipCard(tip: tips[0]['tip'], color: tips[0]['color']),
+            _TipCard(
+                tip: tips[0]['tip'],
+                color: tips[0]['color']),
             const SizedBox(height: 8),
-            _TipCard(tip: tips[1]['tip'], color: tips[1]['color']),
+            _TipCard(
+                tip: tips[1]['tip'],
+                color: tips[1]['color']),
             const SizedBox(height: 8),
-            _TipCard(tip: tips[2]['tip'], color: tips[2]['color']),
+            _TipCard(
+                tip: tips[2]['tip'],
+                color: tips[2]['color']),
             const SizedBox(height: 32),
           ],
         ),
@@ -711,9 +1024,146 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigate(BuildContext context, Widget screen) {
-    Navigator.push(
-            context, MaterialPageRoute(builder: (_) => screen))
+    Navigator.push(context,
+            MaterialPageRoute(builder: (_) => screen))
         .then((_) => _loadData());
+  }
+}
+
+class _ObjectiveCard extends StatelessWidget {
+  final PracticeObjective objective;
+  final VoidCallback onToggleComplete;
+  final Function(ChecklistItem) onToggleItem;
+  final VoidCallback onDelete;
+
+  const _ObjectiveCard({
+    required this.objective,
+    required this.onToggleComplete,
+    required this.onToggleItem,
+    required this.onDelete,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: objective.completed
+            ? Colors.green.withOpacity(0.08)
+            : Colors.deepPurple.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: objective.completed
+              ? Colors.green.withOpacity(0.3)
+              : Colors.deepPurple.withOpacity(0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: onToggleComplete,
+                child: Icon(
+                  objective.completed
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color: objective.completed
+                      ? Colors.green
+                      : Colors.deepPurple,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      objective.pieceName.isEmpty
+                          ? 'Free Practice'
+                          : objective.pieceName,
+                      style: TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: objective.completed
+                            ? Colors.green
+                            : colorScheme.onSurface,
+                        decoration: objective.completed
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    if (objective.section.isNotEmpty)
+                      Text(
+                        objective.section,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface
+                              .withOpacity(0.6),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.delete_outline,
+                    size: 18, color: Colors.red),
+                onPressed: onDelete,
+              ),
+            ],
+          ),
+          if (objective.checklistItems.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...objective.checklistItems.map((item) =>
+                Padding(
+                  padding: const EdgeInsets.only(
+                      left: 34, bottom: 4),
+                  child: GestureDetector(
+                    onTap: () => onToggleItem(item),
+                    child: Row(
+                      children: [
+                        Icon(
+                          item.checked
+                              ? Icons.check_box
+                              : Icons
+                                  .check_box_outline_blank,
+                          size: 18,
+                          color: item.checked
+                              ? Colors.green
+                              : Colors.deepPurple
+                                  .withOpacity(0.5),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.text,
+                            style: TextStyle(
+                              fontSize: 13,
+                              color: item.checked
+                                  ? colorScheme.onSurface
+                                      .withOpacity(0.4)
+                                  : colorScheme.onSurface,
+                              decoration: item.checked
+                                  ? TextDecoration
+                                      .lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )),
+          ],
+        ],
+      ),
+    );
   }
 }
 
@@ -830,19 +1280,23 @@ class _TipCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color.withOpacity(0.25)),
+        border:
+            Border.all(color: color.withOpacity(0.25)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lightbulb_outline, color: color, size: 16),
+          Icon(Icons.lightbulb_outline,
+              color: color, size: 16),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               tip,
               style: TextStyle(
                 fontSize: 12,
-                color: Theme.of(context).colorScheme.onSurface,
+                color: Theme.of(context)
+                    .colorScheme
+                    .onSurface,
               ),
             ),
           ),

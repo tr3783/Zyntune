@@ -2,60 +2,48 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
-class Goal {
+enum GoalType { weekly, monthly, custom }
+
+class LongTermGoal {
   final String id;
   String title;
-  int targetMinutes;
+  GoalType type;
+  String dueDate;
   bool isCompleted;
   String completedDate;
+  String notes;
 
-  Goal({
+  LongTermGoal({
     required this.id,
     required this.title,
-    required this.targetMinutes,
+    required this.type,
+    required this.dueDate,
     this.isCompleted = false,
     this.completedDate = '',
+    this.notes = '',
   });
 
   Map<String, dynamic> toJson() => {
         'id': id,
         'title': title,
-        'targetMinutes': targetMinutes,
+        'type': type.name,
+        'dueDate': dueDate,
         'isCompleted': isCompleted,
         'completedDate': completedDate,
+        'notes': notes,
       };
 
-  factory Goal.fromJson(Map<String, dynamic> json) => Goal(
+  factory LongTermGoal.fromJson(Map<String, dynamic> json) =>
+      LongTermGoal(
         id: json['id'],
         title: json['title'],
-        targetMinutes: json['targetMinutes'],
+        type: GoalType.values.firstWhere(
+            (t) => t.name == (json['type'] ?? 'custom'),
+            orElse: () => GoalType.custom),
+        dueDate: json['dueDate'] ?? '',
         isCompleted: json['isCompleted'] ?? false,
         completedDate: json['completedDate'] ?? '',
-      );
-}
-
-class CompletedGoal {
-  final String title;
-  final String date;
-  final int targetMinutes;
-
-  CompletedGoal({
-    required this.title,
-    required this.date,
-    required this.targetMinutes,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'title': title,
-        'date': date,
-        'targetMinutes': targetMinutes,
-      };
-
-  factory CompletedGoal.fromJson(Map<String, dynamic> json) =>
-      CompletedGoal(
-        title: json['title'],
-        date: json['date'],
-        targetMinutes: json['targetMinutes'],
+        notes: json['notes'] ?? '',
       );
 }
 
@@ -67,12 +55,15 @@ class GoalsScreen extends StatefulWidget {
 }
 
 class _GoalsScreenState extends State<GoalsScreen> {
-  List<Goal> _goals = [];
-  List<CompletedGoal> _history = [];
-  bool _showHistory = false;
+  List<LongTermGoal> _goals = [];
+  String _filter = 'Active';
   final TextEditingController _titleController =
       TextEditingController();
-  int _targetMinutes = 30;
+  final TextEditingController _notesController =
+      TextEditingController();
+  GoalType _selectedType = GoalType.weekly;
+  DateTime _selectedDueDate = DateTime.now()
+      .add(const Duration(days: 7));
 
   @override
   void initState() {
@@ -83,23 +74,16 @@ class _GoalsScreenState extends State<GoalsScreen> {
   @override
   void dispose() {
     _titleController.dispose();
+    _notesController.dispose();
     super.dispose();
   }
 
   Future<void> _loadGoals() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getStringList('goals') ?? [];
-    final historyData =
-        prefs.getStringList('goalHistory') ?? [];
-
+    final data = prefs.getStringList('longTermGoals') ?? [];
     setState(() {
       _goals = data
-          .map((g) => Goal.fromJson(jsonDecode(g)))
-          .toList();
-      _history = historyData
-          .map((h) => CompletedGoal.fromJson(jsonDecode(h)))
-          .toList()
-          .reversed
+          .map((g) => LongTermGoal.fromJson(jsonDecode(g)))
           .toList();
     });
   }
@@ -108,68 +92,41 @@ class _GoalsScreenState extends State<GoalsScreen> {
     final prefs = await SharedPreferences.getInstance();
     final data =
         _goals.map((g) => jsonEncode(g.toJson())).toList();
-    await prefs.setStringList('goals', data);
-  }
-
-  Future<void> _saveHistory() async {
-    final prefs = await SharedPreferences.getInstance();
-    final data = _history.reversed
-        .map((h) => jsonEncode(h.toJson()))
-        .toList();
-    await prefs.setStringList('goalHistory', data);
+    await prefs.setStringList('longTermGoals', data);
   }
 
   void _addGoal() {
     if (_titleController.text.trim().isEmpty) return;
-    final newGoal = Goal(
+    final newGoal = LongTermGoal(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim(),
-      targetMinutes: _targetMinutes,
+      type: _selectedType,
+      dueDate: _selectedDueDate.toString().substring(0, 10),
+      notes: _notesController.text.trim(),
     );
-    setState(() => _goals.add(newGoal));
+    setState(() => _goals.insert(0, newGoal));
     _saveGoals();
     _titleController.clear();
-    _targetMinutes = 30;
+    _notesController.clear();
     Navigator.pop(context);
   }
 
-  void _deleteGoal(String id) {
-    setState(() => _goals.removeWhere((g) => g.id == id));
-    _saveGoals();
-  }
-
-  void _toggleGoal(String id) async {
-    final goal = _goals.firstWhere((g) => g.id == id);
-    final wasCompleted = goal.isCompleted;
-
+  void _toggleGoal(LongTermGoal goal) {
     setState(() {
       goal.isCompleted = !goal.isCompleted;
       goal.completedDate = goal.isCompleted
           ? DateTime.now().toString().substring(0, 10)
           : '';
     });
-
-    // Add to history when completing a goal
-    if (!wasCompleted && goal.isCompleted) {
-      final historyEntry = CompletedGoal(
-        title: goal.title,
-        date: DateTime.now().toString().substring(0, 16),
-        targetMinutes: goal.targetMinutes,
-      );
-      setState(() => _history.insert(0, historyEntry));
-      await _saveHistory();
-    }
-
-    await _saveGoals();
+    _saveGoals();
   }
 
-  void _clearHistory() async {
+  void _deleteGoal(LongTermGoal goal) async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Clear History'),
-        content: const Text(
-            'Are you sure you want to clear all goal completion history?'),
+        title: const Text('Delete Goal'),
+        content: Text('Delete "${goal.title}"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -181,54 +138,165 @@ class _GoalsScreenState extends State<GoalsScreen> {
               backgroundColor: Colors.red,
               foregroundColor: Colors.white,
             ),
-            child: const Text('Clear'),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
-
     if (confirm == true) {
-      setState(() => _history.clear());
-      await _saveHistory();
+      setState(() => _goals.remove(goal));
+      _saveGoals();
+    }
+  }
+
+  Future<void> _pickDueDate(StateSetter setDialogState) async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDueDate,
+      firstDate: DateTime.now(),
+      lastDate:
+          DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setDialogState(() => _selectedDueDate = picked);
     }
   }
 
   void _showAddGoalDialog() {
     _titleController.clear();
-    _targetMinutes = 30;
+    _notesController.clear();
+    _selectedType = GoalType.weekly;
+    _selectedDueDate =
+        DateTime.now().add(const Duration(days: 7));
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Add New Goal'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _titleController,
-                decoration: const InputDecoration(
-                  labelText: 'Goal Title',
-                  hintText: 'e.g. Practice scales daily',
-                  border: OutlineInputBorder(),
+          title: const Text('Add Long-Term Goal'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: _titleController,
+                  decoration: const InputDecoration(
+                    labelText: 'Goal',
+                    hintText:
+                        'e.g. Practice 5 days this week',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.flag),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              Text(
-                'Daily Target: $_targetMinutes minutes',
-                style: const TextStyle(fontSize: 16),
-              ),
-              Slider(
-                value: _targetMinutes.toDouble(),
-                min: 5,
-                max: 180,
-                divisions: 35,
-                label: '$_targetMinutes min',
-                activeColor: Colors.orange,
-                onChanged: (val) => setDialogState(
-                    () => _targetMinutes = val.round()),
-              ),
-            ],
+                const SizedBox(height: 16),
+
+                const Text('Goal Type',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: GoalType.values.map((type) {
+                    final label = type == GoalType.weekly
+                        ? 'Weekly'
+                        : type == GoalType.monthly
+                            ? 'Monthly'
+                            : 'Custom';
+                    final isSelected =
+                        _selectedType == type;
+                    return GestureDetector(
+                      onTap: () {
+                        setDialogState(() {
+                          _selectedType = type;
+                          if (type == GoalType.weekly) {
+                            _selectedDueDate = DateTime.now()
+                                .add(const Duration(days: 7));
+                          } else if (type ==
+                              GoalType.monthly) {
+                            _selectedDueDate = DateTime.now()
+                                .add(const Duration(days: 30));
+                          }
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? Colors.orange
+                              : Colors.orange
+                                  .withOpacity(0.1),
+                          borderRadius:
+                              BorderRadius.circular(20),
+                          border: Border.all(
+                              color: Colors.orange
+                                  .withOpacity(0.4)),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            color: isSelected
+                                ? Colors.white
+                                : Colors.orange,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+
+                const Text('Due Date',
+                    style: TextStyle(
+                        fontWeight: FontWeight.bold)),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: () =>
+                      _pickDueDate(setDialogState),
+                  child: Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                          color: Colors.grey.shade400),
+                      borderRadius:
+                          BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.calendar_today,
+                            size: 18,
+                            color: Colors.orange),
+                        const SizedBox(width: 8),
+                        Text(
+                          _selectedDueDate
+                              .toString()
+                              .substring(0, 10),
+                          style: const TextStyle(
+                              fontSize: 15),
+                        ),
+                        const Spacer(),
+                        const Icon(Icons.edit, size: 16),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                TextField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes (optional)',
+                    hintText:
+                        'e.g. Focus on technique this week',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.notes),
+                  ),
+                  maxLines: 2,
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -249,297 +317,362 @@ class _GoalsScreenState extends State<GoalsScreen> {
     );
   }
 
-  double get _completionRate {
-    if (_goals.isEmpty) return 0;
-    final completed =
-        _goals.where((g) => g.isCompleted).length;
-    return completed / _goals.length;
+  List<LongTermGoal> get _filteredGoals {
+    if (_filter == 'Active') {
+      return _goals
+          .where((g) => !g.isCompleted)
+          .toList();
+    } else if (_filter == 'Completed') {
+      return _goals.where((g) => g.isCompleted).toList();
+    }
+    return _goals;
+  }
+
+  String _daysRemaining(String dueDate) {
+    try {
+      final due = DateTime.parse(dueDate);
+      final now = DateTime.now();
+      final diff = due.difference(now).inDays;
+      if (diff < 0) return 'Overdue!';
+      if (diff == 0) return 'Due today!';
+      if (diff == 1) return '1 day left';
+      return '$diff days left';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  Color _dueDateColor(String dueDate) {
+    try {
+      final due = DateTime.parse(dueDate);
+      final diff = due.difference(DateTime.now()).inDays;
+      if (diff < 0) return Colors.red;
+      if (diff <= 2) return Colors.orange;
+      return Colors.green;
+    } catch (_) {
+      return Colors.grey;
+    }
+  }
+
+  String _typeLabel(GoalType type) {
+    switch (type) {
+      case GoalType.weekly:
+        return 'WEEKLY';
+      case GoalType.monthly:
+        return 'MONTHLY';
+      case GoalType.custom:
+        return 'CUSTOM';
+    }
+  }
+
+  Color _typeColor(GoalType type) {
+    switch (type) {
+      case GoalType.weekly:
+        return Colors.blue;
+      case GoalType.monthly:
+        return Colors.purple;
+      case GoalType.custom:
+        return Colors.teal;
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final active =
+        _goals.where((g) => !g.isCompleted).length;
+    final completed =
+        _goals.where((g) => g.isCompleted).length;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Goals',
             style: TextStyle(fontWeight: FontWeight.bold)),
         backgroundColor: colorScheme.inversePrimary,
-        actions: [
-          // Toggle between goals and history
-          IconButton(
-            icon: Icon(_showHistory
-                ? Icons.flag
-                : Icons.history),
-            onPressed: () =>
-                setState(() => _showHistory = !_showHistory),
-            tooltip: _showHistory
-                ? 'Show Goals'
-                : 'Show History',
-          ),
-        ],
       ),
-      floatingActionButton: _showHistory
-          ? null
-          : FloatingActionButton(
-              onPressed: _showAddGoalDialog,
-              backgroundColor: Colors.orange,
-              child:
-                  const Icon(Icons.add, color: Colors.white),
-            ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _showAddGoalDialog,
+        backgroundColor: Colors.orange,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
       body: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
-        child: _showHistory
-            ? _buildHistory(colorScheme)
-            : _buildGoals(colorScheme),
-      ),
-    );
-  }
+        padding:
+            const EdgeInsets.fromLTRB(16, 16, 16, 48),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
 
-  Widget _buildGoals(ColorScheme colorScheme) {
-    return Column(
-      children: [
-
-        // --- Progress Overview ---
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.orange.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-                color: Colors.orange.withOpacity(0.4),
-                width: 2),
-          ),
-          child: Column(
-            children: [
-              Text(
-                '${(_completionRate * 100).round()}% Complete',
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
+            // --- Summary ---
+            Row(
+              children: [
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color:
+                          Colors.orange.withOpacity(0.1),
+                      borderRadius:
+                          BorderRadius.circular(16),
+                      border: Border.all(
+                          color: Colors.orange
+                              .withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Text('$active',
+                            style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight:
+                                    FontWeight.bold,
+                                color: Colors.orange)),
+                        const Text('Active',
+                            style: TextStyle(
+                                color: Colors.orange,
+                                fontSize: 12)),
+                      ],
+                    ),
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              LinearProgressIndicator(
-                value: _completionRate,
-                backgroundColor:
-                    Colors.orange.withOpacity(0.2),
-                valueColor:
-                    const AlwaysStoppedAnimation<Color>(
-                        Colors.orange),
-                minHeight: 12,
-                borderRadius: BorderRadius.circular(6),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                '${_goals.where((g) => g.isCompleted).length} of ${_goals.length} goals completed today',
-                style: TextStyle(
-                  color:
-                      colorScheme.onSurface.withOpacity(0.7),
-                ),
-              ),
-              if (_history.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                GestureDetector(
-                  onTap: () =>
-                      setState(() => _showHistory = true),
-                  child: Text(
-                    'View completion history (${_history.length} total)',
-                    style: const TextStyle(
-                      color: Colors.orange,
-                      fontSize: 13,
-                      decoration: TextDecoration.underline,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color:
+                          Colors.green.withOpacity(0.1),
+                      borderRadius:
+                          BorderRadius.circular(16),
+                      border: Border.all(
+                          color: Colors.green
+                              .withOpacity(0.3)),
+                    ),
+                    child: Column(
+                      children: [
+                        Text('$completed',
+                            style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight:
+                                    FontWeight.bold,
+                                color: Colors.green)),
+                        const Text('Completed',
+                            style: TextStyle(
+                                color: Colors.green,
+                                fontSize: 12)),
+                      ],
                     ),
                   ),
                 ),
               ],
-            ],
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        Align(
-          alignment: Alignment.centerLeft,
-          child: Text(
-            'My Goals',
-            style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: colorScheme.primary,
             ),
-          ),
-        ),
-        const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-        Expanded(
-          child: _goals.isEmpty
-              ? Center(
-                  child: Text(
-                    'No goals yet!\nTap + to add your first goal',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: colorScheme.onSurface
-                          .withOpacity(0.5),
-                      fontSize: 16,
-                    ),
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _goals.length,
-                  itemBuilder: (context, index) {
-                    final goal = _goals[index];
-                    return Card(
-                      margin:
-                          const EdgeInsets.only(bottom: 10),
-                      child: ListTile(
-                        leading: Checkbox(
-                          value: goal.isCompleted,
-                          activeColor: Colors.orange,
-                          onChanged: (_) =>
-                              _toggleGoal(goal.id),
+            // --- Filter ---
+            Row(
+              children: ['Active', 'Completed', 'All']
+                  .map((f) => Padding(
+                        padding:
+                            const EdgeInsets.only(right: 8),
+                        child: FilterChip(
+                          label: Text(f),
+                          selected: _filter == f,
+                          onSelected: (_) =>
+                              setState(() => _filter = f),
+                          selectedColor: Colors.orange
+                              .withOpacity(0.3),
                         ),
-                        title: Text(
-                          goal.title,
-                          style: TextStyle(
-                            decoration: goal.isCompleted
-                                ? TextDecoration.lineThrough
-                                : null,
-                            fontWeight: FontWeight.bold,
+                      ))
+                  .toList(),
+            ),
+            const SizedBox(height: 16),
+
+            // --- Goals List ---
+            Expanded(
+              child: _filteredGoals.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.flag_outlined,
+                              size: 64,
+                              color: colorScheme.onSurface
+                                  .withOpacity(0.3)),
+                          const SizedBox(height: 16),
+                          Text(
+                            _filter == 'Active'
+                                ? 'No active goals!\nTap + to add a goal 🎯'
+                                : 'No goals here yet.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: colorScheme.onSurface
+                                  .withOpacity(0.5),
+                              fontSize: 16,
+                            ),
                           ),
-                        ),
-                        subtitle: Text(
-                          goal.completedDate.isNotEmpty
-                              ? '${goal.targetMinutes} min/day • Completed ${goal.completedDate}'
-                              : '${goal.targetMinutes} min / day',
-                        ),
-                        trailing: IconButton(
-                          icon: const Icon(
-                              Icons.delete_outline,
-                              color: Colors.red),
-                          onPressed: () =>
-                              _deleteGoal(goal.id),
-                        ),
+                        ],
                       ),
-                    );
-                  },
-                ),
-        ),
-      ],
-    );
-  }
+                    )
+                  : ListView.builder(
+                      itemCount: _filteredGoals.length,
+                      itemBuilder: (context, index) {
+                        final goal =
+                            _filteredGoals[index];
+                        final daysLeft =
+                            _daysRemaining(goal.dueDate);
+                        final dateColor =
+                            _dueDateColor(goal.dueDate);
 
-  Widget _buildHistory(ColorScheme colorScheme) {
-    return Column(
-      children: [
-
-        // --- History Header ---
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.green.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-                color: Colors.green.withOpacity(0.3)),
-          ),
-          child: Row(
-            children: [
-              const Icon(Icons.emoji_events,
-                  color: Colors.green, size: 28),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '${_history.length} Goals Completed',
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                    Text(
-                      'All time goal completions',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: colorScheme.onSurface
-                            .withOpacity(0.6),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_history.isNotEmpty)
-                TextButton(
-                  onPressed: _clearHistory,
-                  child: const Text('Clear',
-                      style: TextStyle(color: Colors.red)),
-                ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        Expanded(
-          child: _history.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment:
-                        MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.history,
-                          size: 64,
-                          color: colorScheme.onSurface
-                              .withOpacity(0.3)),
-                      const SizedBox(height: 16),
-                      Text(
-                        'No completed goals yet!\nCheck off a goal to start your history.',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: colorScheme.onSurface
-                              .withOpacity(0.5),
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  itemCount: _history.length,
-                  itemBuilder: (context, index) {
-                    final item = _history[index];
-                    return Card(
-                      margin:
-                          const EdgeInsets.only(bottom: 8),
-                      child: ListTile(
-                        leading: const CircleAvatar(
-                          backgroundColor: Colors.green,
-                          child: Icon(Icons.check,
-                              color: Colors.white,
-                              size: 18),
-                        ),
-                        title: Text(
-                          item.title,
-                          style: const TextStyle(
-                              fontWeight: FontWeight.bold),
-                        ),
-                        subtitle: Text(
-                            '${item.targetMinutes} min/day target'),
-                        trailing: Text(
-                          item.date,
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: colorScheme.onSurface
-                                .withOpacity(0.5),
+                        return Container(
+                          margin: const EdgeInsets.only(
+                              bottom: 12),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: goal.isCompleted
+                                ? Colors.green
+                                    .withOpacity(0.08)
+                                : colorScheme.onSurface
+                                    .withOpacity(0.04),
+                            borderRadius:
+                                BorderRadius.circular(16),
+                            border: Border.all(
+                              color: goal.isCompleted
+                                  ? Colors.green
+                                      .withOpacity(0.3)
+                                  : colorScheme.onSurface
+                                      .withOpacity(0.12),
+                            ),
                           ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                          child: Column(
+                            crossAxisAlignment:
+                                CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () =>
+                                        _toggleGoal(goal),
+                                    child: Icon(
+                                      goal.isCompleted
+                                          ? Icons
+                                              .check_circle
+                                          : Icons
+                                              .radio_button_unchecked,
+                                      color: goal.isCompleted
+                                          ? Colors.green
+                                          : Colors.orange,
+                                      size: 26,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Text(
+                                      goal.title,
+                                      style: TextStyle(
+                                        fontSize: 15,
+                                        fontWeight:
+                                            FontWeight.bold,
+                                        decoration: goal
+                                                .isCompleted
+                                            ? TextDecoration
+                                                .lineThrough
+                                            : null,
+                                        color: goal.isCompleted
+                                            ? colorScheme
+                                                .onSurface
+                                                .withOpacity(
+                                                    0.5)
+                                            : colorScheme
+                                                .onSurface,
+                                      ),
+                                    ),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(
+                                        Icons.delete_outline,
+                                        size: 18,
+                                        color: Colors.red),
+                                    onPressed: () =>
+                                        _deleteGoal(goal),
+                                  ),
+                                ],
+                              ),
+                              Padding(
+                                padding:
+                                    const EdgeInsets.only(
+                                        left: 36),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets
+                                          .symmetric(
+                                          horizontal: 8,
+                                          vertical: 2),
+                                      decoration:
+                                          BoxDecoration(
+                                        color: _typeColor(
+                                                goal.type)
+                                            .withOpacity(0.15),
+                                        borderRadius:
+                                            BorderRadius
+                                                .circular(8),
+                                      ),
+                                      child: Text(
+                                        _typeLabel(goal.type),
+                                        style: TextStyle(
+                                          fontSize: 10,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                          color: _typeColor(
+                                              goal.type),
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    if (!goal.isCompleted)
+                                      Text(
+                                        daysLeft,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: dateColor,
+                                          fontWeight:
+                                              FontWeight.bold,
+                                        ),
+                                      ),
+                                    if (goal.isCompleted)
+                                      Text(
+                                        'Completed ${goal.completedDate}',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          color: Colors.green,
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                              if (goal.notes.isNotEmpty)
+                                Padding(
+                                  padding:
+                                      const EdgeInsets.only(
+                                          left: 36, top: 4),
+                                  child: Text(
+                                    goal.notes,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: colorScheme
+                                          .onSurface
+                                          .withOpacity(0.6),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
 }
