@@ -97,8 +97,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final todayStr = DateTime.now().toString().substring(0, 10);
 
     for (final s in data) {
-      final match =
-          RegExp(r'"durationMinutes":(\d+)').firstMatch(s);
+      final match = RegExp(r'"durationMinutes":(\d+)').firstMatch(s);
       final mins = int.tryParse(match?.group(1) ?? '0') ?? 0;
       totalMins += mins;
       if (s.contains(todayStr)) todayMins += mins;
@@ -106,18 +105,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final streakData = await StreakHelper.getStreakData();
     final userName = prefs.getString('userName') ?? 'Musician';
-    final instrument =
-        prefs.getString('instrument') ?? 'Guitar';
+    final instrument = prefs.getString('instrument') ?? 'Guitar';
     final dailyGoal = prefs.getInt('dailyGoalMinutes') ?? 30;
 
-    // Load objectives
     final todayKey = 'objectives_$todayStr';
     final objData = prefs.getStringList(todayKey) ?? [];
     final objectives = objData
         .map((s) => PracticeObjective.fromJsonString(s))
         .toList();
 
-    // Load piece names from repertoire
     final piecesData = prefs.getStringList('songs') ?? [];
     final pieceNames = piecesData.map((s) {
       try {
@@ -166,11 +162,8 @@ class _HomeScreenState extends State<HomeScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Piece picker
                 DropdownButtonFormField<String>(
-                  value: selectedPiece.isEmpty
-                      ? null
-                      : selectedPiece,
+                  value: selectedPiece.isEmpty ? null : selectedPiece,
                   decoration: const InputDecoration(
                     labelText: 'Piece (optional)',
                     border: OutlineInputBorder(),
@@ -178,19 +171,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   hint: const Text('Select a piece'),
                   items: [
-                    const DropdownMenuItem(
-                        value: '',
-                        child: Text('Free practice')),
-                    ..._pieceNames.map((s) =>
-                        DropdownMenuItem(
-                            value: s, child: Text(s))),
+                    const DropdownMenuItem(value: '', child: Text('Free practice')),
+                    ..._pieceNames.map((s) => DropdownMenuItem(value: s, child: Text(s))),
                   ],
-                  onChanged: (val) => setDialogState(
-                      () => selectedPiece = val ?? ''),
+                  onChanged: (val) => setDialogState(() => selectedPiece = val ?? ''),
                 ),
                 const SizedBox(height: 12),
-
-                // Section/movement
                 TextField(
                   controller: sectionController,
                   onTapOutside: (_) {},
@@ -202,29 +188,20 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Checklist items
                 const Text('Checklist Items',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold)),
+                    style: TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(height: 8),
                 ...checklistItems.map((item) => Padding(
-                      padding:
-                          const EdgeInsets.only(bottom: 4),
+                      padding: const EdgeInsets.only(bottom: 4),
                       child: Row(
                         children: [
-                          const Icon(
-                              Icons.check_box_outline_blank,
-                              size: 18),
+                          const Icon(Icons.check_box_outline_blank, size: 18),
                           const SizedBox(width: 8),
                           Expanded(child: Text(item)),
                           IconButton(
-                            icon: const Icon(Icons.close,
-                                size: 16),
-                            onPressed: () =>
-                                setDialogState(() =>
-                                    checklistItems
-                                        .remove(item)),
+                            icon: const Icon(Icons.close, size: 16),
+                            onPressed: () => setDialogState(
+                                () => checklistItems.remove(item)),
                           ),
                         ],
                       ),
@@ -237,10 +214,8 @@ class _HomeScreenState extends State<HomeScreen> {
                         decoration: const InputDecoration(
                           hintText: 'Add item...',
                           border: OutlineInputBorder(),
-                          contentPadding:
-                              EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 8),
+                          contentPadding: EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 8),
                         ),
                         onSubmitted: (val) {
                           if (val.trim().isNotEmpty) {
@@ -254,15 +229,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     IconButton(
                       icon: const Icon(Icons.add_circle,
-                          color: Colors.deepPurple),
+                          color: Color(0xFF6B21FF)),
                       onPressed: () {
-                        if (checklistController.text
-                            .trim()
-                            .isNotEmpty) {
+                        if (checklistController.text.trim().isNotEmpty) {
                           setDialogState(() {
-                            checklistItems.add(
-                                checklistController.text
-                                    .trim());
+                            checklistItems.add(checklistController.text.trim());
                             checklistController.clear();
                           });
                         }
@@ -281,16 +252,12 @@ class _HomeScreenState extends State<HomeScreen> {
             ElevatedButton(
               onPressed: () {
                 final obj = PracticeObjective(
-                  id: DateTime.now()
-                      .millisecondsSinceEpoch
-                      .toString(),
+                  id: DateTime.now().millisecondsSinceEpoch.toString(),
                   pieceName: selectedPiece,
                   section: sectionController.text.trim(),
                   checklistItems: checklistItems
                       .map((text) => ChecklistItem(
-                            id: DateTime.now()
-                                .millisecondsSinceEpoch
-                                .toString(),
+                            id: DateTime.now().millisecondsSinceEpoch.toString(),
                             text: text,
                           ))
                       .toList(),
@@ -300,7 +267,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
+                backgroundColor: const Color(0xFF6B21FF),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Add'),
@@ -311,8 +278,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  void _toggleChecklistItem(
-      PracticeObjective obj, ChecklistItem item) {
+  void _toggleChecklistItem(PracticeObjective obj, ChecklistItem item) {
     setState(() => item.checked = !item.checked);
     _saveObjectives();
   }
@@ -329,8 +295,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _showSetGoalDialog() {
     int tempGoal = _dailyGoalMinutes;
-    final customController =
-        TextEditingController(text: '$_dailyGoalMinutes');
+    final customController = TextEditingController(text: '$_dailyGoalMinutes');
 
     showDialog(
       context: context,
@@ -352,27 +317,22 @@ class _HomeScreenState extends State<HomeScreen> {
                             });
                           },
                           child: Container(
-                            padding:
-                                const EdgeInsets.symmetric(
-                                    horizontal: 14,
-                                    vertical: 8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 8),
                             decoration: BoxDecoration(
                               color: tempGoal == min
-                                  ? Colors.teal
-                                  : Colors.teal
-                                      .withOpacity(0.1),
-                              borderRadius:
-                                  BorderRadius.circular(20),
+                                  ? const Color(0xFF6B21FF)
+                                  : const Color(0xFF6B21FF).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(20),
                               border: Border.all(
-                                  color: Colors.teal
-                                      .withOpacity(0.4)),
+                                  color: const Color(0xFF6B21FF).withOpacity(0.4)),
                             ),
                             child: Text(
                               '$min min',
                               style: TextStyle(
                                 color: tempGoal == min
                                     ? Colors.white
-                                    : Colors.teal,
+                                    : const Color(0xFF6B21FF),
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -383,8 +343,7 @@ class _HomeScreenState extends State<HomeScreen> {
               const SizedBox(height: 20),
               Row(
                 children: [
-                  const Text('Custom: ',
-                      style: TextStyle(fontSize: 15)),
+                  const Text('Custom: ', style: TextStyle(fontSize: 15)),
                   SizedBox(
                     width: 80,
                     child: TextField(
@@ -392,8 +351,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
                       inputFormatters: [
-                        FilteringTextInputFormatter
-                            .digitsOnly,
+                        FilteringTextInputFormatter.digitsOnly,
                         LengthLimitingTextInputFormatter(3),
                       ],
                       decoration: const InputDecoration(
@@ -404,14 +362,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       onChanged: (val) {
                         final mins = int.tryParse(val);
                         if (mins != null && mins > 0) {
-                          setDialogState(
-                              () => tempGoal = mins);
+                          setDialogState(() => tempGoal = mins);
                         }
                       },
                     ),
                   ),
-                  const Text(' minutes',
-                      style: TextStyle(fontSize: 15)),
+                  const Text(' minutes', style: TextStyle(fontSize: 15)),
                 ],
               ),
               const SizedBox(height: 12),
@@ -420,7 +376,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.teal,
+                  color: Color(0xFF6B21FF),
                 ),
               ),
             ],
@@ -432,17 +388,14 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                final prefs =
-                    await SharedPreferences.getInstance();
-                await prefs.setInt(
-                    'dailyGoalMinutes', tempGoal);
-                setState(
-                    () => _dailyGoalMinutes = tempGoal);
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setInt('dailyGoalMinutes', tempGoal);
+                setState(() => _dailyGoalMinutes = tempGoal);
                 customController.dispose();
                 if (mounted) Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal,
+                backgroundColor: const Color(0xFF6B21FF),
                 foregroundColor: Colors.white,
               ),
               child: const Text('Set Goal'),
@@ -475,175 +428,220 @@ class _HomeScreenState extends State<HomeScreen> {
 
   double get _dailyProgress {
     if (_dailyGoalMinutes == 0) return 0;
-    return (_todayMinutes / _dailyGoalMinutes)
-        .clamp(0.0, 1.0);
+    return (_todayMinutes / _dailyGoalMinutes).clamp(0.0, 1.0);
   }
 
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark =
-        Theme.of(context).brightness == Brightness.dark;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final tips = _todaysTips;
-    final goalReached =
-        _todayMinutes >= _dailyGoalMinutes;
+    final goalReached = _todayMinutes >= _dailyGoalMinutes;
 
     return Scaffold(
+      backgroundColor: isDark
+          ? const Color(0xFF0D0D1A)
+          : const Color(0xFFF5F0FF),
       appBar: AppBar(
         title: const Text(
           'Zyntune',
           style: TextStyle(
-              fontWeight: FontWeight.bold, fontSize: 22),
+            fontWeight: FontWeight.w800,
+            fontSize: 24,
+            letterSpacing: 1.2,
+            color: Colors.white,
+          ),
         ),
         centerTitle: true,
-        backgroundColor: colorScheme.inversePrimary,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
         automaticallyImplyLeading: false,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFF6B21FF), Color(0xFF9B59B6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined, color: Colors.white),
             onPressed: () => Navigator.push(
               context,
-              MaterialPageRoute(
-                  builder: (_) => const SettingsScreen()),
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ).then((_) => _loadData()),
           ),
           IconButton(
             icon: Icon(
-                isDark ? Icons.light_mode : Icons.dark_mode),
-            onPressed: () =>
-                ZyntuneApp.of(context)?.toggleTheme(),
+                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
+                color: Colors.white),
+            onPressed: () => ZyntuneApp.of(context)?.toggleTheme(),
           ),
         ],
       ),
       body: SingleChildScrollView(
-        padding:
-            const EdgeInsets.fromLTRB(16, 16, 16, 48),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
 
-            // --- Header Card ---
+            // --- Hero Welcome Card ---
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(18),
+              padding: const EdgeInsets.all(22),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [
-                          Colors.deepPurple.shade800,
-                          Colors.purple.shade900
-                        ]
-                      : [
-                          Colors.deepPurple.shade300,
-                          Colors.purple.shade400
-                        ],
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6B21FF), Color(0xFF9B59B6)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6B21FF).withOpacity(0.4),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
               ),
               child: Column(
-                crossAxisAlignment:
-                    CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(_todayDate,
-                      style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 13)),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Welcome, $_userName!',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(_todayDate,
+                              style: const TextStyle(
+                                  color: Colors.white60, fontSize: 12)),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Hey, $_userName! 👋',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 22,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.2),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(_getInstrumentIcon(_instrument),
+                                color: Colors.white, size: 14),
+                            const SizedBox(width: 6),
+                            Text(_instrument,
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  ),
-                  const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      Icon(
-                          _getInstrumentIcon(_instrument),
-                          color: Colors.white70,
-                          size: 14),
-                      const SizedBox(width: 4),
-                      Text(_instrument,
-                          style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 13)),
-                    ],
-                  ),
-                  const SizedBox(height: 14),
-                  Row(
-                    children: [
-                      _QuickStat(
-                          label: 'Sessions',
-                          value: '$_totalSessions',
-                          icon: Icons.event_note),
-                      const SizedBox(width: 20),
-                      _QuickStat(
-                          label: 'Minutes',
-                          value: '$_totalMinutes',
-                          icon: Icons.timer),
-                      const SizedBox(width: 20),
-                      _QuickStat(
-                          label: 'Hours',
-                          value: (_totalMinutes / 60)
-                              .toStringAsFixed(1),
-                          icon: Icons.star),
-                    ],
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _StatPill(
+                            label: 'Sessions',
+                            value: '$_totalSessions',
+                            icon: Icons.event_note_outlined),
+                        _Divider(),
+                        _StatPill(
+                            label: 'Minutes',
+                            value: '$_totalMinutes',
+                            icon: Icons.timer_outlined),
+                        _Divider(),
+                        _StatPill(
+                            label: 'Hours',
+                            value: (_totalMinutes / 60).toStringAsFixed(1),
+                            icon: Icons.star_outline),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
-            // --- Daily Goal Card ---
+            // --- Daily Goal Card — full gradient like other cards ---
             GestureDetector(
               onTap: _showSetGoalDialog,
               child: Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  color: goalReached
-                      ? Colors.green.withOpacity(0.1)
-                      : Colors.teal.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  gradient: LinearGradient(
+                    colors: goalReached
+                        ? [
+                            const Color(0xFF00C853),
+                            const Color(0xFF69F0AE).withOpacity(0.8),
+                          ]
+                        : [
+                            const Color(0xFF1A0A4E),
+                            const Color(0xFF2D1B69),
+                          ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(
                     color: goalReached
-                        ? Colors.green.withOpacity(0.4)
-                        : Colors.teal.withOpacity(0.4),
-                    width: 2,
+                        ? Colors.green.withOpacity(0.6)
+                        : const Color(0xFF6B21FF).withOpacity(0.6),
+                    width: 1.5,
                   ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: goalReached
+                          ? Colors.green.withOpacity(0.3)
+                          : const Color(0xFF6B21FF).withOpacity(0.3),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
                 ),
                 child: Row(
                   children: [
                     SizedBox(
-                      width: 72,
-                      height: 72,
+                      width: 76,
+                      height: 76,
                       child: Stack(
                         alignment: Alignment.center,
                         children: [
                           CircularProgressIndicator(
                             value: _dailyProgress,
-                            strokeWidth: 8,
-                            backgroundColor: Colors.teal
-                                .withOpacity(0.2),
-                            color: goalReached
-                                ? Colors.green
-                                : Colors.teal,
+                            strokeWidth: 7,
+                            backgroundColor: Colors.white.withOpacity(0.15),
+                            color: Colors.white,
                           ),
                           Text(
                             goalReached
-                                ? 'Done!'
+                                ? '✓'
                                 : '${(_dailyProgress * 100).round()}%',
                             style: TextStyle(
-                              fontSize:
-                                  goalReached ? 10 : 12,
+                              fontSize: goalReached ? 22 : 13,
                               fontWeight: FontWeight.bold,
-                              color: goalReached
-                                  ? Colors.green
-                                  : Colors.teal,
+                              color: Colors.white,
                             ),
                           ),
                         ],
@@ -652,175 +650,104 @@ class _HomeScreenState extends State<HomeScreen> {
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
-                        crossAxisAlignment:
-                            CrossAxisAlignment.start,
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            goalReached
-                                ? 'Daily Goal Reached!'
-                                : 'Today\'s Practice Goal',
-                            style: TextStyle(
-                              fontSize: 15,
+                            goalReached ? '🎉 Goal Reached!' : "Today's Goal",
+                            style: const TextStyle(
+                              fontSize: 16,
                               fontWeight: FontWeight.bold,
-                              color: goalReached
-                                  ? Colors.green
-                                  : Colors.teal,
+                              color: Colors.white,
                             ),
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            '$_todayMinutes / $_dailyGoalMinutes min today',
-                            style: TextStyle(
+                            '$_todayMinutes / $_dailyGoalMinutes min',
+                            style: const TextStyle(
                               fontSize: 13,
-                              color: colorScheme.onSurface
-                                  .withOpacity(0.7),
+                              color: Colors.white70,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(4),
+                            child: LinearProgressIndicator(
+                              value: _dailyProgress,
+                              backgroundColor: Colors.white.withOpacity(0.2),
+                              color: Colors.white,
+                              minHeight: 6,
                             ),
                           ),
                           const SizedBox(height: 4),
-                          if (!goalReached)
-                            Text(
-                              '${_dailyGoalMinutes - _todayMinutes} min remaining',
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.teal),
+                          Text(
+                            goalReached
+                                ? 'Amazing work today!'
+                                : '${_dailyGoalMinutes - _todayMinutes} min remaining',
+                            style: const TextStyle(
+                              fontSize: 11,
+                              color: Colors.white70,
+                              fontWeight: FontWeight.w500,
                             ),
-                          if (goalReached)
-                            const Text(
-                              'Amazing work today!',
-                              style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.green),
-                            ),
+                          ),
                         ],
                       ),
                     ),
-                    Icon(Icons.edit,
-                        size: 16,
-                        color: colorScheme.onSurface
-                            .withOpacity(0.3)),
+                    const Icon(Icons.edit_outlined,
+                        size: 16, color: Colors.white54),
                   ],
                 ),
               ),
             ),
-            const SizedBox(height: 12),
-
-            // --- Today's Objectives ---
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text("Today's Objectives",
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.primary,
-                    )),
-                TextButton.icon(
-                  onPressed: _showAddObjectiveDialog,
-                  icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add'),
-                  style: TextButton.styleFrom(
-                    foregroundColor: Colors.deepPurple,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            if (_objectives.isEmpty)
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color:
-                      Colors.deepPurple.withOpacity(0.05),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                      color: Colors.deepPurple
-                          .withOpacity(0.2)),
-                ),
-                child: Column(
-                  children: [
-                    Icon(Icons.playlist_add,
-                        size: 36,
-                        color: Colors.deepPurple
-                            .withOpacity(0.4)),
-                    const SizedBox(height: 8),
-                    Text(
-                      'No objectives yet.\nTap Add to set what you want to work on today!',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: colorScheme.onSurface
-                            .withOpacity(0.5),
-                      ),
-                    ),
-                  ],
-                ),
-              )
-            else
-              ..._objectives.map((obj) => _ObjectiveCard(
-                    objective: obj,
-                    onToggleComplete: () =>
-                        _toggleObjectiveComplete(obj),
-                    onToggleItem: (item) =>
-                        _toggleChecklistItem(obj, item),
-                    onDelete: () => _deleteObjective(obj),
-                  )),
-
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
 
             // --- Streak Card ---
             Container(
               width: double.infinity,
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: isDark
-                      ? [
-                          Colors.orange.shade800,
-                          Colors.deepOrange.shade900
-                        ]
-                      : [
-                          Colors.orange.shade300,
-                          Colors.deepOrange.shade400
-                        ],
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFFF6B35), Color(0xFFFF8C42)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFFF6B35).withOpacity(0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: Row(
                 children: [
+                  const Text('🔥', style: TextStyle(fontSize: 36)),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text('Practice Streak',
                             style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 13)),
-                        const SizedBox(height: 4),
+                                color: Colors.white70, fontSize: 12)),
+                        const SizedBox(height: 2),
                         Row(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.end,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
                             Text(
                               '$_currentStreak',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 42,
-                                fontWeight: FontWeight.bold,
+                                fontSize: 40,
+                                fontWeight: FontWeight.w900,
+                                height: 1,
                               ),
                             ),
                             const Padding(
-                              padding: EdgeInsets.only(
-                                  bottom: 6),
-                              child: Text(' days',
+                              padding: EdgeInsets.only(bottom: 6, left: 4),
+                              child: Text('days',
                                   style: TextStyle(
-                                      color: Colors.white70,
-                                      fontSize: 16)),
+                                      color: Colors.white70, fontSize: 14)),
                             ),
                           ],
                         ),
@@ -829,10 +756,9 @@ class _HomeScreenState extends State<HomeScreen> {
                               ? 'Start your streak today!'
                               : _currentStreak == 1
                                   ? 'Great start! Keep going!'
-                                  : 'Amazing consistency!',
+                                  : 'You\'re on fire! 🔥',
                           style: const TextStyle(
-                              color: Colors.white70,
-                              fontSize: 12),
+                              color: Colors.white70, fontSize: 12),
                         ),
                       ],
                     ),
@@ -841,13 +767,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      borderRadius:
-                          BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(16),
                     ),
                     child: Column(
                       children: [
                         const Icon(Icons.emoji_events,
-                            color: Colors.white, size: 28),
+                            color: Colors.white, size: 26),
                         const SizedBox(height: 4),
                         Text('$_longestStreak',
                             style: const TextStyle(
@@ -857,8 +782,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             )),
                         const Text('Best',
                             style: TextStyle(
-                                color: Colors.white70,
-                                fontSize: 11)),
+                                color: Colors.white70, fontSize: 10)),
                       ],
                     ),
                   ),
@@ -867,154 +791,197 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 20),
 
-            // --- Tools Section ---
-            Text('Tools',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: colorScheme.primary,
-                )),
-            const SizedBox(height: 12),
-
+            // --- Today's Objectives ---
             Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.music_note,
-                    label: 'Metronome',
-                    subtitle: 'BPM & tempo',
-                    color: Colors.deepPurple,
-                    onTap: () => _navigate(
-                        context, const MetronomeScreen()),
+                const Text(
+                  "Today's Objectives",
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                GestureDetector(
+                  onTap: _showAddObjectiveDialog,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 7),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF6B21FF), Color(0xFF9B59B6)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: const Color(0xFF6B21FF).withOpacity(0.3),
+                          blurRadius: 8,
+                          offset: const Offset(0, 3),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(Icons.add, size: 14, color: Colors.white),
+                        SizedBox(width: 4),
+                        Text('Add',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600)),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.timer,
-                    label: 'Timer',
-                    subtitle: 'Track sessions',
-                    color: Colors.teal,
-                    onTap: () => _navigate(
-                        context, const TimerScreen()),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.flag,
-                    label: 'Goals',
-                    subtitle: 'Daily targets',
-                    color: Colors.orange,
-                    onTap: () => _navigate(
-                        context, const GoalsScreen()),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.library_music,
-                    label: 'Repertoire',
-                    subtitle: 'My pieces',
-                    color: Colors.pink,
-                    onTap: () => _navigate(
-                        context, const SongsScreen()),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.bar_chart,
-                    label: 'Stats',
-                    subtitle: 'Progress charts',
-                    color: Colors.blue,
-                    onTap: () => _navigate(
-                        context, const StatsScreen()),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.graphic_eq,
-                    label: 'Tuner',
-                    subtitle: 'Check pitch',
-                    color: Colors.green,
-                    onTap: () => _navigate(
-                        context, const TunerScreen()),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-
-            Row(
-              children: [
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.note_alt,
-                    label: 'Lesson Notes',
-                    subtitle: 'Quick scratchpad',
-                    color: Colors.indigo,
-                    onTap: () => _navigate(
-                        context, const NotesScreen()),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: _FeatureCard(
-                    icon: Icons.calendar_month,
-                    label: 'Calendar',
-                    subtitle: 'Practice history',
-                    color: Colors.deepPurple,
-                    onTap: () => _navigate(
-                        context, const CalendarScreen()),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-
-            // --- Today's Tips ---
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                Text('Tips of the Day',
-                    style: TextStyle(
-                      fontSize: 17,
-                      fontWeight: FontWeight.bold,
-                      color: colorScheme.primary,
-                    )),
-                Text('Updates daily',
-                    style: TextStyle(
-                      fontSize: 11,
-                      color: colorScheme.onSurface
-                          .withOpacity(0.4),
-                    )),
               ],
             ),
             const SizedBox(height: 10),
-            _TipCard(
-                tip: tips[0]['tip'],
-                color: tips[0]['color']),
+
+            if (_objectives.isEmpty)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                    vertical: 28, horizontal: 20),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [Color(0xFF1A0A4E), Color(0xFF2D1B69)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                      color: const Color(0xFF6B21FF).withOpacity(0.5)),
+                ),
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF6B21FF).withOpacity(0.3),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.playlist_add,
+                          size: 28, color: Colors.white),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      "What will you practice today?",
+                      style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                          color: Colors.white),
+                    ),
+                    const SizedBox(height: 4),
+                    const Text(
+                      'Tap Add to set your practice objectives',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                          fontSize: 12, color: Colors.white60),
+                    ),
+                  ],
+                ),
+              )
+            else
+              ..._objectives.map((obj) => _ObjectiveCard(
+                    objective: obj,
+                    onToggleComplete: () => _toggleObjectiveComplete(obj),
+                    onToggleItem: (item) => _toggleChecklistItem(obj, item),
+                    onDelete: () => _deleteObjective(obj),
+                  )),
+            const SizedBox(height: 20),
+
+            // --- Tools Grid ---
+            const Text('Tools',
+                style: TextStyle(
+                    fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+
+            GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 4,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.85,
+              children: [
+                _ToolButton(
+                  icon: Icons.music_note,
+                  label: 'Metronome',
+                  color: const Color(0xFF6B21FF),
+                  onTap: () => _navigate(context, const MetronomeScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.timer_outlined,
+                  label: 'Timer',
+                  color: const Color(0xFF00BFA5),
+                  onTap: () => _navigate(context, const TimerScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.flag_outlined,
+                  label: 'Goals',
+                  color: const Color(0xFFFF6B35),
+                  onTap: () => _navigate(context, const GoalsScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.library_music_outlined,
+                  label: 'Repertoire',
+                  color: const Color(0xFFE91E8C),
+                  onTap: () => _navigate(context, const SongsScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.bar_chart,
+                  label: 'Stats',
+                  color: const Color(0xFF2196F3),
+                  onTap: () => _navigate(context, const StatsScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.graphic_eq,
+                  label: 'Tuner',
+                  color: const Color(0xFF4CAF50),
+                  onTap: () => _navigate(context, const TunerScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.note_alt_outlined,
+                  label: 'Notes',
+                  color: const Color(0xFF5C6BC0),
+                  onTap: () => _navigate(context, const NotesScreen()),
+                ),
+                _ToolButton(
+                  icon: Icons.calendar_month_outlined,
+                  label: 'Calendar',
+                  color: const Color(0xFF9C27B0),
+                  onTap: () => _navigate(context, const CalendarScreen()),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+
+            // --- Tips ---
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                const Text('Tips of the Day',
+                    style: TextStyle(
+                        fontSize: 18, fontWeight: FontWeight.bold)),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6B21FF).withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Text('Daily',
+                      style: TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF6B21FF),
+                          fontWeight: FontWeight.w600)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            _TipCard(tip: tips[0]['tip'], color: tips[0]['color']),
             const SizedBox(height: 8),
-            _TipCard(
-                tip: tips[1]['tip'],
-                color: tips[1]['color']),
+            _TipCard(tip: tips[1]['tip'], color: tips[1]['color']),
             const SizedBox(height: 8),
-            _TipCard(
-                tip: tips[2]['tip'],
-                color: tips[2]['color']),
+            _TipCard(tip: tips[2]['tip'], color: tips[2]['color']),
             const SizedBox(height: 32),
           ],
         ),
@@ -1023,9 +990,101 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _navigate(BuildContext context, Widget screen) {
-    Navigator.push(context,
-            MaterialPageRoute(builder: (_) => screen))
+    Navigator.push(context, MaterialPageRoute(builder: (_) => screen))
         .then((_) => _loadData());
+  }
+}
+
+class _Divider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 30,
+      color: Colors.white.withOpacity(0.2),
+    );
+  }
+}
+
+class _StatPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final IconData icon;
+
+  const _StatPill({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white70, size: 14),
+        const SizedBox(height: 4),
+        Text(value,
+            style: const TextStyle(
+                color: Colors.white,
+                fontSize: 20,
+                fontWeight: FontWeight.bold)),
+        Text(label,
+            style: const TextStyle(color: Colors.white60, fontSize: 10)),
+      ],
+    );
+  }
+}
+
+class _ToolButton extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _ToolButton({
+    required this.icon,
+    required this.label,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [color.withOpacity(0.9), color.withOpacity(0.6)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: [
+            BoxShadow(
+              color: color.withOpacity(0.35),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 26),
+            const SizedBox(height: 6),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -1045,6 +1104,7 @@ class _ObjectiveCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -1052,13 +1112,22 @@ class _ObjectiveCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: objective.completed
             ? Colors.green.withOpacity(0.08)
-            : Colors.deepPurple.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(16),
+            : isDark
+                ? Colors.white.withOpacity(0.05)
+                : Colors.white,
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(
           color: objective.completed
-              ? Colors.green.withOpacity(0.3)
-              : Colors.deepPurple.withOpacity(0.25),
+              ? Colors.green.withOpacity(0.4)
+              : const Color(0xFF6B21FF).withOpacity(0.2),
         ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1073,15 +1142,14 @@ class _ObjectiveCard extends StatelessWidget {
                       : Icons.radio_button_unchecked,
                   color: objective.completed
                       ? Colors.green
-                      : Colors.deepPurple,
+                      : const Color(0xFF6B21FF),
                   size: 24,
                 ),
               ),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       objective.pieceName.isEmpty
@@ -1102,41 +1170,35 @@ class _ObjectiveCard extends StatelessWidget {
                       Text(
                         objective.section,
                         style: TextStyle(
-                          fontSize: 12,
-                          color: colorScheme.onSurface
-                              .withOpacity(0.6),
-                        ),
+                            fontSize: 12,
+                            color: colorScheme.onSurface.withOpacity(0.55)),
                       ),
                   ],
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.delete_outline,
-                    size: 18, color: Colors.red),
+                icon: Icon(Icons.delete_outline,
+                    size: 18, color: Colors.red.withOpacity(0.7)),
                 onPressed: onDelete,
               ),
             ],
           ),
           if (objective.checklistItems.isNotEmpty) ...[
             const SizedBox(height: 8),
-            ...objective.checklistItems.map((item) =>
-                Padding(
-                  padding: const EdgeInsets.only(
-                      left: 34, bottom: 4),
+            ...objective.checklistItems.map((item) => Padding(
+                  padding: const EdgeInsets.only(left: 34, bottom: 6),
                   child: GestureDetector(
                     onTap: () => onToggleItem(item),
                     child: Row(
                       children: [
                         Icon(
                           item.checked
-                              ? Icons.check_box
-                              : Icons
-                                  .check_box_outline_blank,
-                          size: 18,
+                              ? Icons.check_circle_outline
+                              : Icons.circle_outlined,
+                          size: 16,
                           color: item.checked
                               ? Colors.green
-                              : Colors.deepPurple
-                                  .withOpacity(0.5),
+                              : const Color(0xFF6B21FF).withOpacity(0.5),
                         ),
                         const SizedBox(width: 8),
                         Expanded(
@@ -1145,12 +1207,10 @@ class _ObjectiveCard extends StatelessWidget {
                             style: TextStyle(
                               fontSize: 13,
                               color: item.checked
-                                  ? colorScheme.onSurface
-                                      .withOpacity(0.4)
+                                  ? colorScheme.onSurface.withOpacity(0.35)
                                   : colorScheme.onSurface,
                               decoration: item.checked
-                                  ? TextDecoration
-                                      .lineThrough
+                                  ? TextDecoration.lineThrough
                                   : null,
                             ),
                           ),
@@ -1166,105 +1226,6 @@ class _ObjectiveCard extends StatelessWidget {
   }
 }
 
-class _QuickStat extends StatelessWidget {
-  final String label;
-  final String value;
-  final IconData icon;
-
-  const _QuickStat({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Icon(icon, color: Colors.white70, size: 13),
-            const SizedBox(width: 3),
-            Text(label,
-                style: const TextStyle(
-                    color: Colors.white70, fontSize: 11)),
-          ],
-        ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _FeatureCard extends StatelessWidget {
-  final IconData icon;
-  final String label;
-  final String subtitle;
-  final Color color;
-  final VoidCallback onTap;
-
-  const _FeatureCard({
-    required this.icon,
-    required this.label,
-    required this.subtitle,
-    required this.color,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: color.withOpacity(0.12),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(
-              color: color.withOpacity(0.35), width: 1.5),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(icon, color: color, size: 24),
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: color,
-              ),
-            ),
-            Text(
-              subtitle,
-              style: TextStyle(
-                fontSize: 11,
-                color: color.withOpacity(0.7),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class _TipCard extends StatelessWidget {
   final String tip;
   final Color color;
@@ -1273,29 +1234,34 @@ class _TipCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(12),
-        border:
-            Border.all(color: color.withOpacity(0.25)),
+        color: isDark ? color.withOpacity(0.1) : color.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: color.withOpacity(0.2)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(Icons.lightbulb_outline,
-              color: color, size: 16),
-          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.15),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(Icons.lightbulb_outline, color: color, size: 14),
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               tip,
               style: TextStyle(
-                fontSize: 12,
-                color: Theme.of(context)
-                    .colorScheme
-                    .onSurface,
+                fontSize: 13,
+                color: Theme.of(context).colorScheme.onSurface,
+                height: 1.4,
               ),
             ),
           ),

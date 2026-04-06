@@ -156,13 +156,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirm == true) {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('practiceSessions');
-      await prefs.remove('goals');
-      await prefs.remove('songs');
-      await prefs.remove('lessonNotes');
-      await prefs.remove('currentStreak');
-      await prefs.remove('longestStreak');
-      await prefs.remove('lastPracticeDate');
+      await prefs.clear();
       await NotificationHelper.cancelReminders();
 
       if (mounted) {

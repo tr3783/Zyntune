@@ -6,13 +6,15 @@ class OnboardingScreen extends StatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  State<OnboardingScreen> createState() =>
+      _OnboardingScreenState();
 }
 
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
-  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _nameController =
+      TextEditingController();
   String _selectedInstrument = 'Guitar';
 
   final List<String> _instruments = [
@@ -47,7 +49,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       emoji: '🎼',
       title: 'Manage Your\nRepertoire',
       subtitle:
-          'Keep track of every piece you\'re learning, in progress, or have mastered. Add notes and links.',
+          'Keep track of every piece you\'re learning, in progress, or have mastered.',
       color: Colors.pink,
     ),
     const _OnboardingPage(
@@ -88,15 +90,18 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboardingComplete', true);
     await prefs.setString(
-        'userName', _nameController.text.trim().isEmpty
+        'userName',
+        _nameController.text.trim().isEmpty
             ? 'Musician'
             : _nameController.text.trim());
-    await prefs.setString('instrument', _selectedInstrument);
+    await prefs.setString(
+        'instrument', _selectedInstrument);
 
     if (mounted) {
       Navigator.pushReplacement(
         context,
-        MaterialPageRoute(builder: (_) => const HomeScreen()),
+        MaterialPageRoute(
+            builder: (_) => const HomeScreen()),
       );
     }
   }
@@ -104,169 +109,176 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Stack(
-        children: [
-          // --- Page View ---
-          PageView.builder(
-            controller: _pageController,
-            onPageChanged: (index) =>
-                setState(() => _currentPage = index),
-            itemCount: _pages.length,
-            itemBuilder: (context, index) {
-              final page = _pages[index];
-              return _buildPage(page, index);
-            },
-          ),
+      resizeToAvoidBottomInset: true,
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Skip button
+            if (_currentPage < _pages.length - 1)
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton(
+                  onPressed: () {
+                    _pageController.animateToPage(
+                      _pages.length - 1,
+                      duration:
+                          const Duration(milliseconds: 400),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Text(
+                    'Skip',
+                    style: TextStyle(
+                      color: _pages[_currentPage]
+                          .color
+                          .withOpacity(0.7),
+                      fontSize: 16,
+                    ),
+                  ),
+                ),
+              )
+            else
+              const SizedBox(height: 48),
 
-          // --- Skip button (top right) ---
-          if (_currentPage < _pages.length - 1)
-            Positioned(
-              top: 56,
-              right: 24,
-              child: TextButton(
-                onPressed: () {
-                  _pageController.animateToPage(
-                    _pages.length - 1,
-                    duration: const Duration(milliseconds: 400),
-                    curve: Curves.easeInOut,
-                  );
+            // Page view
+            Expanded(
+              child: PageView.builder(
+                controller: _pageController,
+                onPageChanged: (index) =>
+                    setState(() => _currentPage = index),
+                itemCount: _pages.length,
+                itemBuilder: (context, index) {
+                  return _buildPage(_pages[index]);
                 },
-                child: Text(
-                  'Skip',
-                  style: TextStyle(
-                    color: _pages[_currentPage]
-                        .color
-                        .withOpacity(0.7),
-                    fontSize: 16,
+              ),
+            ),
+
+            // Page dots
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                _pages.length,
+                (index) => AnimatedContainer(
+                  duration:
+                      const Duration(milliseconds: 300),
+                  margin:
+                      const EdgeInsets.symmetric(horizontal: 4),
+                  width: _currentPage == index ? 24 : 8,
+                  height: 8,
+                  decoration: BoxDecoration(
+                    color: _currentPage == index
+                        ? _pages[_currentPage].color
+                        : _pages[_currentPage]
+                            .color
+                            .withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(4),
                   ),
                 ),
               ),
             ),
+            const SizedBox(height: 16),
 
-          // --- Bottom navigation ---
-          Positioned(
-            bottom: 48,
-            left: 24,
-            right: 24,
-            child: Column(
-              children: [
-                // Page dots
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: List.generate(
-                    _pages.length,
-                    (index) => AnimatedContainer(
-                      duration: const Duration(milliseconds: 300),
-                      margin:
-                          const EdgeInsets.symmetric(horizontal: 4),
-                      width: _currentPage == index ? 24 : 8,
-                      height: 8,
-                      decoration: BoxDecoration(
-                        color: _currentPage == index
-                            ? _pages[_currentPage].color
-                            : _pages[_currentPage]
-                                .color
-                                .withOpacity(0.3),
-                        borderRadius: BorderRadius.circular(4),
-                      ),
+            // Navigation buttons
+            Padding(
+              padding: const EdgeInsets.fromLTRB(
+                  24, 0, 24, 24),
+              child: Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                children: [
+                  _currentPage > 0
+                      ? OutlinedButton.icon(
+                          onPressed: _previousPage,
+                          icon: const Icon(
+                              Icons.arrow_back),
+                          label: const Text('Back'),
+                          style: OutlinedButton.styleFrom(
+                            padding:
+                                const EdgeInsets.symmetric(
+                                    horizontal: 20,
+                                    vertical: 12),
+                            shape: RoundedRectangleBorder(
+                                borderRadius:
+                                    BorderRadius.circular(
+                                        30)),
+                          ),
+                        )
+                      : const SizedBox(width: 100),
+                  ElevatedButton.icon(
+                    onPressed:
+                        _currentPage == _pages.length - 1
+                            ? _completeOnboarding
+                            : _nextPage,
+                    icon: Icon(
+                      _currentPage == _pages.length - 1
+                          ? Icons.check
+                          : Icons.arrow_forward,
+                    ),
+                    label: Text(
+                      _currentPage == _pages.length - 1
+                          ? 'Get Started!'
+                          : 'Next',
+                      style:
+                          const TextStyle(fontSize: 16),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor:
+                          _pages[_currentPage].color,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 28, vertical: 14),
+                      shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(30)),
                     ),
                   ),
-                ),
-                const SizedBox(height: 24),
-
-                // Navigation buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Back button
-                    _currentPage > 0
-                        ? OutlinedButton.icon(
-                            onPressed: _previousPage,
-                            icon: const Icon(Icons.arrow_back),
-                            label: const Text('Back'),
-                            style: OutlinedButton.styleFrom(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 20, vertical: 12),
-                              shape: RoundedRectangleBorder(
-                                  borderRadius:
-                                      BorderRadius.circular(30)),
-                            ),
-                          )
-                        : const SizedBox(width: 100),
-
-                    // Next / Get Started button
-                    ElevatedButton.icon(
-                      onPressed: _currentPage == _pages.length - 1
-                          ? _completeOnboarding
-                          : _nextPage,
-                      icon: Icon(
-                        _currentPage == _pages.length - 1
-                            ? Icons.check
-                            : Icons.arrow_forward,
-                      ),
-                      label: Text(
-                        _currentPage == _pages.length - 1
-                            ? 'Get Started!'
-                            : 'Next',
-                        style: const TextStyle(fontSize: 16),
-                      ),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor:
-                            _pages[_currentPage].color,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 28, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                            borderRadius:
-                                BorderRadius.circular(30)),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildPage(_OnboardingPage page, int index) {
+  Widget _buildPage(_OnboardingPage page) {
     final colorScheme = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
 
-    return Container(
+    return SingleChildScrollView(
       padding: const EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const SizedBox(height: 80),
+          const SizedBox(height: 20),
 
-          // Emoji icon in colored circle
+          // Emoji icon
           Container(
-            width: 120,
-            height: 120,
+            width: 110,
+            height: 110,
             decoration: BoxDecoration(
               color: page.color.withOpacity(0.15),
               shape: BoxShape.circle,
               border: Border.all(
-                  color: page.color.withOpacity(0.3), width: 2),
+                  color: page.color.withOpacity(0.3),
+                  width: 2),
             ),
             child: Center(
               child: Text(
                 page.emoji,
-                style: const TextStyle(fontSize: 56),
+                style: const TextStyle(fontSize: 52),
               ),
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 32),
 
           // Title
           Text(
             page.title,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 32,
+              fontSize: 30,
               fontWeight: FontWeight.bold,
               color: page.color,
               height: 1.2,
@@ -279,14 +291,15 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             page.subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
-              fontSize: 16,
-              color: colorScheme.onSurface.withOpacity(0.7),
+              fontSize: 15,
+              color: colorScheme.onSurface
+                  .withOpacity(0.7),
               height: 1.5,
             ),
           ),
-          const SizedBox(height: 32),
+          const SizedBox(height: 24),
 
-          // Last page — name & instrument input
+          // Last page inputs
           if (page.isLastPage) ...[
             TextField(
               controller: _nameController,
@@ -300,14 +313,16 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     ? Colors.white.withOpacity(0.05)
                     : Colors.grey.withOpacity(0.05),
               ),
+              textInputAction: TextInputAction.done,
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<String>(
-              initialValue: _selectedInstrument,
+              value: _selectedInstrument,
               decoration: InputDecoration(
                 labelText: 'Your Instrument',
                 border: const OutlineInputBorder(),
-                prefixIcon: const Icon(Icons.music_note),
+                prefixIcon:
+                    const Icon(Icons.music_note),
                 filled: true,
                 fillColor: isDark
                     ? Colors.white.withOpacity(0.05)
@@ -321,10 +336,12 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                   .toList(),
               onChanged: (val) {
                 if (val != null) {
-                  setState(() => _selectedInstrument = val);
+                  setState(
+                      () => _selectedInstrument = val);
                 }
               },
             ),
+            const SizedBox(height: 16),
           ],
         ],
       ),
@@ -332,7 +349,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 }
 
-// Data class for each onboarding page
 class _OnboardingPage {
   final String emoji;
   final String title;
