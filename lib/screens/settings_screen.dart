@@ -16,7 +16,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _selectedInstrument = 'Guitar';
   bool _isDarkMode = true;
   bool _reminderEnabled = false;
-  TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
+  TimeOfDay _reminderTime =
+      const TimeOfDay(hour: 9, minute: 0);
 
   final List<String> _instruments = [
     'Guitar', 'Piano', 'Violin', 'Viola', 'Cello',
@@ -62,10 +63,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _nameController.text.trim().isEmpty
             ? 'Musician'
             : _nameController.text.trim());
-    await prefs.setString('instrument', _selectedInstrument);
+    await prefs.setString(
+        'instrument', _selectedInstrument);
     await prefs.setBool('darkMode', _isDarkMode);
 
-    // Save reminder settings
     if (_reminderEnabled) {
       final granted =
           await NotificationHelper.requestPermission();
@@ -74,13 +75,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
           hour: _reminderTime.hour,
           minute: _reminderTime.minute,
         );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Reminder set for ${_formatTime(_reminderTime)}!'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+        }
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                  'Please enable notifications in Settings'),
-              backgroundColor: Colors.orange,
+                  'Permission denied — go to iPhone Settings → Zyntune → Notifications and enable them'),
+              backgroundColor: Colors.red,
+              duration: Duration(seconds: 5),
             ),
           );
         }
@@ -89,16 +101,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       await NotificationHelper.cancelReminders();
     }
 
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Settings saved!'),
-          backgroundColor: Colors.green,
-          duration: Duration(seconds: 2),
-        ),
-      );
-      Navigator.pop(context);
-    }
+    if (mounted) Navigator.pop(context);
   }
 
   Future<void> _pickReminderTime() async {
@@ -106,6 +109,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
       context: context,
       initialTime: _reminderTime,
       helpText: 'Set Practice Reminder Time',
+      builder: (context, child) {
+        return MediaQuery(
+          data: MediaQuery.of(context).copyWith(
+            alwaysUse24HourFormat: false,
+          ),
+          child: Theme(
+            data: Theme.of(context).copyWith(
+              timePickerTheme: const TimePickerThemeData(
+                entryModeIconColor: Colors.transparent,
+              ),
+            ),
+            child: child!,
+          ),
+        );
+      },
     );
     if (picked != null) {
       setState(() => _reminderTime = picked);
@@ -165,7 +183,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         : time.hourOfPeriod;
     final minute =
         time.minute.toString().padLeft(2, '0');
-    final period = time.period == DayPeriod.am ? 'AM' : 'PM';
+    final period =
+        time.period == DayPeriod.am ? 'AM' : 'PM';
     return '$hour:$minute $period';
   }
 
@@ -182,7 +201,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
         backgroundColor: colorScheme.inversePrimary,
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+        padding:
+            const EdgeInsets.fromLTRB(16, 16, 16, 48),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -197,8 +217,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color:
-                    colorScheme.onSurface.withOpacity(0.05),
+                color: colorScheme.onSurface
+                    .withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
@@ -213,11 +233,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   const SizedBox(height: 16),
                   DropdownButtonFormField<String>(
-                    initialValue: _selectedInstrument,
+                    value: _selectedInstrument,
                     decoration: const InputDecoration(
                       labelText: 'Your Instrument',
                       border: OutlineInputBorder(),
-                      prefixIcon: Icon(Icons.music_note),
+                      prefixIcon:
+                          Icon(Icons.music_note),
                     ),
                     items: _instruments
                         .map((i) => DropdownMenuItem(
@@ -247,13 +268,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color:
-                    colorScheme.onSurface.withOpacity(0.05),
+                color: colorScheme.onSurface
+                    .withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
                 children: [
-                  // Enable toggle
                   Row(
                     mainAxisAlignment:
                         MainAxisAlignment.spaceBetween,
@@ -264,20 +284,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               color: colorScheme.primary),
                           const SizedBox(width: 12),
                           const Text('Daily Reminder',
-                              style:
-                                  TextStyle(fontSize: 16)),
+                              style: TextStyle(
+                                  fontSize: 16)),
                         ],
                       ),
                       Switch(
                         value: _reminderEnabled,
                         onChanged: (val) => setState(
                             () => _reminderEnabled = val),
-                        activeThumbColor: colorScheme.primary,
+                        activeThumbColor:
+                            colorScheme.primary,
                       ),
                     ],
                   ),
-
-                  // Time picker (only show if enabled)
                   if (_reminderEnabled) ...[
                     const Divider(),
                     Row(
@@ -287,7 +306,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         Row(
                           children: [
                             Icon(Icons.access_time,
-                                color: colorScheme.primary),
+                                color:
+                                    colorScheme.primary),
                             const SizedBox(width: 12),
                             const Text('Reminder Time',
                                 style: TextStyle(
@@ -323,7 +343,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'You\'ll get a daily reminder to practice at this time.',
+                              'Notification fires when the app is closed or in the background.',
                               style: TextStyle(
                                   fontSize: 12,
                                   color:
@@ -349,8 +369,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color:
-                    colorScheme.onSurface.withOpacity(0.05),
+                color: colorScheme.onSurface
+                    .withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Row(
@@ -367,9 +387,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       ),
                       const SizedBox(width: 12),
                       Text(
-                        isDark ? 'Dark Mode' : 'Light Mode',
-                        style:
-                            const TextStyle(fontSize: 16),
+                        isDark
+                            ? 'Dark Mode'
+                            : 'Light Mode',
+                        style: const TextStyle(
+                            fontSize: 16),
                       ),
                     ],
                   ),
@@ -378,7 +400,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     onChanged: (val) {
                       setState(() => _isDarkMode = val);
                       ZyntuneApp.of(context)
-    ?.toggleTheme();
+                          ?.toggleTheme();
                     },
                     activeThumbColor: colorScheme.primary,
                   ),
@@ -397,8 +419,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color:
-                    colorScheme.onSurface.withOpacity(0.05),
+                color: colorScheme.onSurface
+                    .withOpacity(0.05),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Column(
@@ -455,12 +477,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: Colors.red),
                 label: const Text('Reset All Data',
                     style: TextStyle(
-                        color: Colors.red, fontSize: 16)),
+                        color: Colors.red,
+                        fontSize: 16)),
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                       vertical: 16),
-                  side:
-                      const BorderSide(color: Colors.red),
+                  side: const BorderSide(
+                      color: Colors.red),
                   shape: RoundedRectangleBorder(
                       borderRadius:
                           BorderRadius.circular(16)),
@@ -493,7 +516,8 @@ class _SettingsRow extends StatelessWidget {
         children: [
           Icon(icon,
               size: 20,
-              color: Theme.of(context).colorScheme.primary),
+              color:
+                  Theme.of(context).colorScheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Text(label,

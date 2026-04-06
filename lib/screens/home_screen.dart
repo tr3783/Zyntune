@@ -193,6 +193,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 // Section/movement
                 TextField(
                   controller: sectionController,
+                  onTapOutside: (_) {},
                   decoration: const InputDecoration(
                     labelText: 'Section / Movement',
                     hintText: 'e.g. Measures 24-32, Chorus',
@@ -296,8 +297,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 );
                 setState(() => _objectives.add(obj));
                 _saveObjectives();
-                sectionController.dispose();
-                checklistController.dispose();
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(

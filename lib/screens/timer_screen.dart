@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../streak_helper.dart';
 import '../timer_service.dart';
+import '../practice_objective.dart';
 
 class PracticeSession {
   final String id;
@@ -50,11 +51,13 @@ class _TimerScreenState extends State<TimerScreen> {
   final TextEditingController _customMinutesController =
       TextEditingController();
   List<PracticeSession> _sessions = [];
+  List<PracticeObjective> _objectives = [];
 
   @override
   void initState() {
     super.initState();
     _loadSessions();
+    _loadObjectives();
     _timerService.addListener(_onTimerUpdate);
   }
 
@@ -70,6 +73,39 @@ class _TimerScreenState extends State<TimerScreen> {
     super.dispose();
   }
 
+  Future<void> _loadObjectives() async {
+    final prefs = await SharedPreferences.getInstance();
+    final todayStr =
+        DateTime.now().toString().substring(0, 10);
+    final todayKey = 'objectives_$todayStr';
+    final objData = prefs.getStringList(todayKey) ?? [];
+    setState(() {
+      _objectives = objData
+          .map((s) => PracticeObjective.fromJsonString(s))
+          .toList();
+    });
+  }
+
+  Future<void> _saveObjectives() async {
+    final prefs = await SharedPreferences.getInstance();
+    final todayStr =
+        DateTime.now().toString().substring(0, 10);
+    final todayKey = 'objectives_$todayStr';
+    await prefs.setStringList(todayKey,
+        _objectives.map((o) => o.toJsonString()).toList());
+  }
+
+  void _toggleChecklistItem(
+      PracticeObjective obj, ChecklistItem item) {
+    setState(() => item.checked = !item.checked);
+    _saveObjectives();
+  }
+
+  void _toggleObjectiveComplete(PracticeObjective obj) {
+    setState(() => obj.completed = !obj.completed);
+    _saveObjectives();
+  }
+
   void _startStopwatch() => _timerService.start();
   void _pauseStopwatch() => _timerService.pause();
   void _resetStopwatch() => _timerService.reset();
@@ -82,10 +118,12 @@ class _TimerScreenState extends State<TimerScreen> {
 
   Future<void> _loadSessions() async {
     final prefs = await SharedPreferences.getInstance();
-    final data = prefs.getStringList('practiceSessions') ?? [];
+    final data =
+        prefs.getStringList('practiceSessions') ?? [];
     setState(() {
       _sessions = data
-          .map((s) => PracticeSession.fromJson(jsonDecode(s)))
+          .map((s) =>
+              PracticeSession.fromJson(jsonDecode(s)))
           .toList()
           .reversed
           .toList();
@@ -104,7 +142,8 @@ class _TimerScreenState extends State<TimerScreen> {
     final newSession = PracticeSession(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now().toString().substring(0, 16),
-      durationMinutes: (_timerService.elapsed / 60).floor(),
+      durationMinutes:
+          (_timerService.elapsed / 60).floor(),
       notes: _notesController.text.trim(),
     );
     setState(() => _sessions.insert(0, newSession));
@@ -207,8 +246,6 @@ class _TimerScreenState extends State<TimerScreen> {
                     editNotesController.text.trim();
               });
               await _saveSessions();
-              editNotesController.dispose();
-              editMinutesController.dispose();
               if (mounted) Navigator.pop(context);
             },
             style: ElevatedButton.styleFrom(
@@ -246,8 +283,8 @@ class _TimerScreenState extends State<TimerScreen> {
       ),
     );
     if (confirm == true) {
-      setState(() =>
-          _sessions.removeWhere((s) => s.id == session.id));
+      setState(() => _sessions
+          .removeWhere((s) => s.id == session.id));
       await _saveSessions();
     }
   }
@@ -268,9 +305,12 @@ class _TimerScreenState extends State<TimerScreen> {
     final isRunning = _timerService.isRunning;
     final isPaused = _timerService.isPaused;
     final countdownActive = _timerService.countdownActive;
-    final countdownFinished = _timerService.countdownFinished;
-    final countdownRemaining = _timerService.countdownRemaining;
-    final countdownProgress = _timerService.countdownProgress;
+    final countdownFinished =
+        _timerService.countdownFinished;
+    final countdownRemaining =
+        _timerService.countdownRemaining;
+    final countdownProgress =
+        _timerService.countdownProgress;
 
     return Scaffold(
       appBar: AppBar(
@@ -281,10 +321,64 @@ class _TimerScreenState extends State<TimerScreen> {
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
+          padding:
+              const EdgeInsets.fromLTRB(16, 16, 16, 48),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+
+              // --- TODAY'S OBJECTIVES ---
+              Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                children: [
+                  Text("Today's Objectives",
+                      style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: colorScheme.primary)),
+                  TextButton.icon(
+                    onPressed: _loadObjectives,
+                    icon: const Icon(Icons.refresh,
+                        size: 16),
+                    label: const Text('Refresh'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: Colors.deepPurple,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              if (_objectives.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: Colors.deepPurple
+                        .withOpacity(0.05),
+                    borderRadius:
+                        BorderRadius.circular(14),
+                    border: Border.all(
+                        color: Colors.deepPurple
+                            .withOpacity(0.2)),
+                  ),
+                  child: Text(
+                    'No objectives set for today.\nAdd them on the home screen!',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: colorScheme.onSurface
+                          .withOpacity(0.5),
+                    ),
+                  ),
+                )
+              else
+                ..._objectives.map((obj) =>
+                    _buildObjectiveCard(
+                        obj, colorScheme)),
+
+              const SizedBox(height: 24),
 
               // --- STOPWATCH ---
               Text('Stopwatch',
@@ -323,8 +417,9 @@ class _TimerScreenState extends State<TimerScreen> {
                         icon: Icon(isRunning
                             ? Icons.pause
                             : Icons.play_arrow),
-                        label: Text(
-                            isRunning ? 'Pause' : 'Start'),
+                        label: Text(isRunning
+                            ? 'Pause'
+                            : 'Start'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: isRunning
                               ? Colors.orange
@@ -332,7 +427,8 @@ class _TimerScreenState extends State<TimerScreen> {
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               borderRadius:
-                                  BorderRadius.circular(16)),
+                                  BorderRadius.circular(
+                                      16)),
                         ),
                       ),
                     ),
@@ -346,9 +442,10 @@ class _TimerScreenState extends State<TimerScreen> {
                                     ? _stopStopwatch
                                     : null,
                             icon: const Icon(Icons.stop),
-                            label:
-                                const Text('Stop & Save'),
-                            style: ElevatedButton.styleFrom(
+                            label: const Text(
+                                'Stop & Save'),
+                            style:
+                                ElevatedButton.styleFrom(
                               backgroundColor: Colors.red,
                               foregroundColor: Colors.white,
                               shape: RoundedRectangleBorder(
@@ -362,9 +459,11 @@ class _TimerScreenState extends State<TimerScreen> {
                         Expanded(
                           child: OutlinedButton.icon(
                             onPressed: _resetStopwatch,
-                            icon: const Icon(Icons.refresh),
+                            icon:
+                                const Icon(Icons.refresh),
                             label: const Text('Reset'),
-                            style: OutlinedButton.styleFrom(
+                            style:
+                                OutlinedButton.styleFrom(
                               shape: RoundedRectangleBorder(
                                   borderRadius:
                                       BorderRadius.circular(
@@ -402,8 +501,8 @@ class _TimerScreenState extends State<TimerScreen> {
                         selectedColor:
                             Colors.teal.withOpacity(0.3),
                         onSelected: (_) {
-                          setState(
-                              () => _selectedPreset = min);
+                          setState(() =>
+                              _selectedPreset = min);
                           _timerService
                               .setCountdownDuration(min);
                         },
@@ -427,14 +526,16 @@ class _TimerScreenState extends State<TimerScreen> {
                       decoration: const InputDecoration(
                         hintText: 'min',
                         border: OutlineInputBorder(),
-                        contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 8),
+                        contentPadding:
+                            EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 8),
                       ),
                       onSubmitted: (val) {
                         final mins = int.tryParse(val);
                         if (mins != null && mins > 0) {
-                          setState(
-                              () => _selectedPreset = -1);
+                          setState(() =>
+                              _selectedPreset = -1);
                           _timerService
                               .setCountdownDuration(mins);
                           FocusScope.of(context).unfocus();
@@ -444,8 +545,8 @@ class _TimerScreenState extends State<TimerScreen> {
                         final mins = int.tryParse(
                             _customMinutesController.text);
                         if (mins != null && mins > 0) {
-                          setState(
-                              () => _selectedPreset = -1);
+                          setState(() =>
+                              _selectedPreset = -1);
                           _timerService
                               .setCountdownDuration(mins);
                         }
@@ -485,14 +586,11 @@ class _TimerScreenState extends State<TimerScreen> {
                           child: CircularProgressIndicator(
                             value: countdownProgress,
                             strokeWidth: 10,
-                            backgroundColor:
-                                Colors.orange.withOpacity(0.2),
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(
-                              countdownFinished
-                                  ? Colors.green
-                                  : Colors.orange,
-                            ),
+                            backgroundColor: Colors.orange
+                                .withOpacity(0.2),
+                            color: countdownFinished
+                                ? Colors.green
+                                : Colors.orange,
                           ),
                         ),
                         Text(
@@ -528,7 +626,8 @@ class _TimerScreenState extends State<TimerScreen> {
                           foregroundColor: Colors.white,
                           shape: RoundedRectangleBorder(
                               borderRadius:
-                                  BorderRadius.circular(16)),
+                                  BorderRadius.circular(
+                                      16)),
                         ),
                       ),
                     ),
@@ -543,7 +642,8 @@ class _TimerScreenState extends State<TimerScreen> {
                         style: OutlinedButton.styleFrom(
                           shape: RoundedRectangleBorder(
                               borderRadius:
-                                  BorderRadius.circular(16)),
+                                  BorderRadius.circular(
+                                      16)),
                         ),
                       ),
                     ),
@@ -605,7 +705,8 @@ class _TimerScreenState extends State<TimerScreen> {
                             decoration: BoxDecoration(
                               color: Colors.red,
                               borderRadius:
-                                  BorderRadius.circular(12),
+                                  BorderRadius.circular(
+                                      12),
                             ),
                             child: const Icon(Icons.delete,
                                 color: Colors.white),
@@ -619,7 +720,8 @@ class _TimerScreenState extends State<TimerScreen> {
                               onTap: () =>
                                   _showEditDialog(session),
                               leading: const CircleAvatar(
-                                backgroundColor: Colors.teal,
+                                backgroundColor:
+                                    Colors.teal,
                                 child: Icon(
                                     Icons.music_note,
                                     color: Colors.white,
@@ -651,7 +753,8 @@ class _TimerScreenState extends State<TimerScreen> {
                                   ),
                                   IconButton(
                                     icon: const Icon(
-                                        Icons.delete_outline,
+                                        Icons
+                                            .delete_outline,
                                         size: 18,
                                         color: Colors.red),
                                     onPressed: () =>
@@ -669,6 +772,123 @@ class _TimerScreenState extends State<TimerScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildObjectiveCard(
+      PracticeObjective obj, ColorScheme colorScheme) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: obj.completed
+            ? Colors.green.withOpacity(0.08)
+            : Colors.deepPurple.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: obj.completed
+              ? Colors.green.withOpacity(0.3)
+              : Colors.deepPurple.withOpacity(0.25),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () =>
+                    _toggleObjectiveComplete(obj),
+                child: Icon(
+                  obj.completed
+                      ? Icons.check_circle
+                      : Icons.radio_button_unchecked,
+                  color: obj.completed
+                      ? Colors.green
+                      : Colors.deepPurple,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      obj.pieceName.isEmpty
+                          ? 'Free Practice'
+                          : obj.pieceName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: obj.completed
+                            ? Colors.green
+                            : colorScheme.onSurface,
+                        decoration: obj.completed
+                            ? TextDecoration.lineThrough
+                            : null,
+                      ),
+                    ),
+                    if (obj.section.isNotEmpty)
+                      Text(
+                        obj.section,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: colorScheme.onSurface
+                              .withOpacity(0.6),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (obj.checklistItems.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            ...obj.checklistItems.map((item) => Padding(
+                  padding: const EdgeInsets.only(
+                      left: 32, bottom: 4),
+                  child: GestureDetector(
+                    onTap: () =>
+                        _toggleChecklistItem(obj, item),
+                    child: Row(
+                      children: [
+                        Icon(
+                          item.checked
+                              ? Icons.check_box
+                              : Icons
+                                  .check_box_outline_blank,
+                          size: 16,
+                          color: item.checked
+                              ? Colors.green
+                              : Colors.deepPurple
+                                  .withOpacity(0.5),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            item.text,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: item.checked
+                                  ? colorScheme.onSurface
+                                      .withOpacity(0.4)
+                                  : colorScheme.onSurface,
+                              decoration: item.checked
+                                  ? TextDecoration
+                                      .lineThrough
+                                  : null,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )),
+          ],
+        ],
       ),
     );
   }

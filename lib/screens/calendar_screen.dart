@@ -90,6 +90,33 @@ class _CalendarScreenState extends State<CalendarScreen> {
       } catch (e) {}
     }
 
+
+    // Load goals due dates
+    final goalsList =
+        prefs.getStringList('longTermGoals') ?? [];
+    for (final s in goalsList) {
+      try {
+        final g = jsonDecode(s) as Map<String, dynamic>;
+        final dueDate = g['dueDate'] as String? ?? '';
+        if (dueDate.isEmpty) continue;
+        final isCompleted = g['isCompleted'] as bool? ?? false;
+        if (isCompleted) continue;
+        final goalEvent = CalendarEvent(
+          id: 'goal_${g['id']}',
+          title: g['title'] ?? '',
+          type: EventType.deadline,
+          date: dueDate,
+          notes: '${(g['category'] ?? 'weekly').toString().toUpperCase()} GOAL',
+        );
+        eventsMap[dueDate] ??= [];
+        // Avoid duplicates
+        if (!eventsMap[dueDate]!
+            .any((e) => e.id == goalEvent.id)) {
+          eventsMap[dueDate]!.add(goalEvent);
+        }
+      } catch (e) {}
+    }
+
     setState(() {
       _practiceData = practiceMap;
       _events = eventsMap;
@@ -324,8 +351,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 });
                 _saveEvents();
                 Navigator.pop(context);
-                titleController.dispose();
-                notesController.dispose();
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.deepPurple,
