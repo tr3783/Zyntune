@@ -43,8 +43,7 @@ class CalendarScreen extends StatefulWidget {
   const CalendarScreen({super.key});
 
   @override
-  State<CalendarScreen> createState() =>
-      _CalendarScreenState();
+  State<CalendarScreen> createState() => _CalendarScreenState();
 }
 
 class _CalendarScreenState extends State<CalendarScreen> {
@@ -53,6 +52,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Map<String, List<CalendarEvent>> _events = {};
   int _selectedDayMinutes = 0;
   String _selectedDate = '';
+
+  static const _purple = Color(0xFF6B21FF);
+  static const _darkBg = Color(0xFF0D0D1A);
+  static const _cardBg = Color(0xFF1A0A4E);
+  static const _cardBg2 = Color(0xFF2D1B69);
 
   @override
   void initState() {
@@ -63,24 +67,18 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Load practice sessions
     final data = prefs.getStringList('practiceSessions') ?? [];
     final Map<String, int> practiceMap = {};
     for (final s in data) {
       try {
-        final session =
-            jsonDecode(s) as Map<String, dynamic>;
-        final date =
-            (session['date'] as String).substring(0, 10);
+        final session = jsonDecode(s) as Map<String, dynamic>;
+        final date = (session['date'] as String).substring(0, 10);
         final mins = session['durationMinutes'] as int;
-        practiceMap[date] =
-            (practiceMap[date] ?? 0) + mins;
+        practiceMap[date] = (practiceMap[date] ?? 0) + mins;
       } catch (e) {}
     }
 
-    // Load events
-    final eventData =
-        prefs.getStringList('calendarEvents') ?? [];
+    final eventData = prefs.getStringList('calendarEvents') ?? [];
     final Map<String, List<CalendarEvent>> eventsMap = {};
     for (final s in eventData) {
       try {
@@ -90,10 +88,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       } catch (e) {}
     }
 
-
-    // Load goals due dates
-    final goalsList =
-        prefs.getStringList('longTermGoals') ?? [];
+    final goalsList = prefs.getStringList('longTermGoals') ?? [];
     for (final s in goalsList) {
       try {
         final g = jsonDecode(s) as Map<String, dynamic>;
@@ -106,12 +101,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           title: g['title'] ?? '',
           type: EventType.deadline,
           date: dueDate,
-          notes: '${(g['category'] ?? 'weekly').toString().toUpperCase()} GOAL',
+          notes:
+              '${(g['category'] ?? 'weekly').toString().toUpperCase()} GOAL',
         );
         eventsMap[dueDate] ??= [];
-        // Avoid duplicates
-        if (!eventsMap[dueDate]!
-            .any((e) => e.id == goalEvent.id)) {
+        if (!eventsMap[dueDate]!.any((e) => e.id == goalEvent.id)) {
           eventsMap[dueDate]!.add(goalEvent);
         }
       } catch (e) {}
@@ -125,24 +119,23 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Future<void> _saveEvents() async {
     final prefs = await SharedPreferences.getInstance();
-    final allEvents =
-        _events.values.expand((e) => e).toList();
+    final allEvents = _events.values.expand((e) => e).toList();
     await prefs.setStringList('calendarEvents',
         allEvents.map((e) => jsonEncode(e.toJson())).toList());
   }
 
   List<DateTime?> _getDaysInMonth() {
-    final firstDay = DateTime(
-        _focusedMonth.year, _focusedMonth.month, 1);
-    final lastDay = DateTime(
-        _focusedMonth.year, _focusedMonth.month + 1, 0);
+    final firstDay =
+        DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDay =
+        DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final days = <DateTime?>[];
     for (int i = 1; i < firstDay.weekday; i++) {
       days.add(null);
     }
     for (int i = 1; i <= lastDay.day; i++) {
-      days.add(DateTime(
-          _focusedMonth.year, _focusedMonth.month, i));
+      days.add(
+          DateTime(_focusedMonth.year, _focusedMonth.month, i));
     }
     return days;
   }
@@ -152,27 +145,24 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Color _getDayColor(int minutes) {
     if (minutes == 0) return Colors.transparent;
-    if (minutes < 15)
-      return Colors.deepPurple.withOpacity(0.3);
-    if (minutes < 30)
-      return Colors.deepPurple.withOpacity(0.5);
-    if (minutes < 60)
-      return Colors.deepPurple.withOpacity(0.75);
-    return Colors.deepPurple;
+    if (minutes < 15) return _purple.withOpacity(0.3);
+    if (minutes < 30) return _purple.withOpacity(0.5);
+    if (minutes < 60) return _purple.withOpacity(0.75);
+    return _purple;
   }
 
   Color _eventTypeColor(EventType type) {
     switch (type) {
       case EventType.recital:
-        return Colors.pink;
+        return const Color(0xFFE91E8C);
       case EventType.audition:
-        return Colors.red;
+        return const Color(0xFFFF4444);
       case EventType.lesson:
-        return Colors.blue;
+        return const Color(0xFF2196F3);
       case EventType.deadline:
-        return Colors.orange;
+        return const Color(0xFFFF6B35);
       case EventType.performance:
-        return Colors.green;
+        return const Color(0xFF4CAF50);
       case EventType.other:
         return Colors.grey;
     }
@@ -218,8 +208,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   void _previousMonth() {
     setState(() {
-      _focusedMonth = DateTime(
-          _focusedMonth.year, _focusedMonth.month - 1);
+      _focusedMonth =
+          DateTime(_focusedMonth.year, _focusedMonth.month - 1);
       _selectedDate = '';
       _selectedDayMinutes = 0;
     });
@@ -227,8 +217,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   void _nextMonth() {
     setState(() {
-      _focusedMonth = DateTime(
-          _focusedMonth.year, _focusedMonth.month + 1);
+      _focusedMonth =
+          DateTime(_focusedMonth.year, _focusedMonth.month + 1);
       _selectedDate = '';
       _selectedDayMinutes = 0;
     });
@@ -243,7 +233,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text('Add Event — $date'),
+          backgroundColor: _cardBg,
+          title: Text('Add Event — $date',
+              style: const TextStyle(
+                  color: Colors.white, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -251,31 +244,51 @@ class _CalendarScreenState extends State<CalendarScreen> {
               children: [
                 TextField(
                   controller: titleController,
-                  decoration: const InputDecoration(
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
                     labelText: 'Event Title *',
+                    labelStyle:
+                        const TextStyle(color: Colors.white60),
                     hintText: 'e.g. Spring Recital',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.event),
+                    hintStyle:
+                        const TextStyle(color: Colors.white30),
+                    prefixIcon: const Icon(Icons.event,
+                        color: Colors.white54),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          const BorderSide(color: _purple),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 16),
                 const Text('Event Type',
                     style: TextStyle(
-                        fontWeight: FontWeight.bold)),
+                        fontWeight: FontWeight.bold,
+                        color: Colors.white70)),
                 const SizedBox(height: 8),
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: EventType.values.map((type) {
-                    final isSelected =
-                        selectedType == type;
+                    final isSelected = selectedType == type;
                     final color = _eventTypeColor(type);
                     return GestureDetector(
                       onTap: () => setDialogState(
                           () => selectedType = type),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
                           color: isSelected
                               ? color
@@ -283,15 +296,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           borderRadius:
                               BorderRadius.circular(20),
                           border: Border.all(
-                              color:
-                                  color.withOpacity(0.5)),
+                              color: color.withOpacity(0.5)),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(
-                                _eventTypeIcon(type),
-                                size: 14,
+                            Icon(_eventTypeIcon(type),
+                                size: 13,
                                 color: isSelected
                                     ? Colors.white
                                     : color),
@@ -303,8 +314,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 color: isSelected
                                     ? Colors.white
                                     : color,
-                                fontWeight:
-                                    FontWeight.bold,
+                                fontWeight: FontWeight.bold,
                               ),
                             ),
                           ],
@@ -316,11 +326,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 const SizedBox(height: 16),
                 TextField(
                   controller: notesController,
-                  decoration: const InputDecoration(
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
                     labelText: 'Notes (optional)',
+                    labelStyle:
+                        const TextStyle(color: Colors.white60),
                     hintText: 'e.g. Wear formal attire',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.notes),
+                    hintStyle:
+                        const TextStyle(color: Colors.white30),
+                    prefixIcon: const Icon(Icons.notes,
+                        color: Colors.white54),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          const BorderSide(color: _purple),
+                    ),
                   ),
                   maxLines: 2,
                 ),
@@ -330,7 +360,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Colors.white54)),
             ),
             ElevatedButton(
               onPressed: () {
@@ -353,8 +384,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.deepPurple,
+                backgroundColor: _purple,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('Add Event'),
             ),
@@ -376,7 +409,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final days = _getDaysInMonth();
     final today = DateTime.now();
     const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
@@ -389,7 +421,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final selectedEvents = _events[_selectedDate] ?? [];
     final selectedMinutes = _practiceData[_selectedDate] ?? 0;
 
-    // Upcoming events this month
     final todayStr = _dateKey(today);
     final upcomingEvents = _events.entries
         .where((e) =>
@@ -401,59 +432,71 @@ class _CalendarScreenState extends State<CalendarScreen> {
       ..sort((a, b) => a.date.compareTo(b.date));
 
     return Scaffold(
+      backgroundColor: _darkBg,
       appBar: AppBar(
         title: const Text('Practice Calendar',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: colorScheme.inversePrimary,
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_purple, Color(0xFF9B59B6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       body: SingleChildScrollView(
-        padding:
-            const EdgeInsets.fromLTRB(16, 16, 16, 48),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
         child: Column(
           children: [
 
             // --- Month Summary ---
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.deepPurple.shade700,
-                    Colors.purple.shade800
-                  ],
+                gradient: const LinearGradient(
+                  colors: [_purple, Color(0xFF9B59B6)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(20),
+                borderRadius: BorderRadius.circular(24),
+                boxShadow: [
+                  BoxShadow(
+                    color: _purple.withOpacity(0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
               ),
               child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceEvenly,
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _MonthStat(
                     label: 'Days Practiced',
                     value: '$_practiceDaysThisMonth',
-                    icon: Icons.calendar_today,
+                    icon: Icons.calendar_today_outlined,
                   ),
                   Container(
-                      width: 1,
-                      height: 40,
-                      color: Colors.white24),
+                      width: 1, height: 40, color: Colors.white24),
                   _MonthStat(
                     label: 'Total Minutes',
                     value: '$_totalMinutesThisMonth',
-                    icon: Icons.timer,
+                    icon: Icons.timer_outlined,
                   ),
                   Container(
-                      width: 1,
-                      height: 40,
-                      color: Colors.white24),
+                      width: 1, height: 40, color: Colors.white24),
                   _MonthStat(
                     label: 'Total Hours',
-                    value: (_totalMinutesThisMonth / 60)
-                        .toStringAsFixed(1),
-                    icon: Icons.star,
+                    value:
+                        '${(_totalMinutesThisMonth / 60).toStringAsFixed(1)}',
+                    icon: Icons.star_outline,
                   ),
                 ],
               ),
@@ -461,29 +504,42 @@ class _CalendarScreenState extends State<CalendarScreen> {
             const SizedBox(height: 20),
 
             // --- Month Navigation ---
-            Row(
-              mainAxisAlignment:
-                  MainAxisAlignment.spaceBetween,
-              children: [
-                IconButton(
-                  onPressed: _previousMonth,
-                  icon: const Icon(Icons.chevron_left),
-                ),
-                Text(
-                  '${months[_focusedMonth.month - 1]} ${_focusedMonth.year}',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [_cardBg, _cardBg2]),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: _purple.withOpacity(0.3)),
+              ),
+              child: Row(
+                mainAxisAlignment:
+                    MainAxisAlignment.spaceBetween,
+                children: [
+                  IconButton(
+                    onPressed: _previousMonth,
+                    icon: const Icon(Icons.chevron_left,
+                        color: Colors.white70),
                   ),
-                ),
-                IconButton(
-                  onPressed: _nextMonth,
-                  icon: const Icon(Icons.chevron_right),
-                ),
-              ],
+                  Text(
+                    '${months[_focusedMonth.month - 1]} ${_focusedMonth.year}',
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: _nextMonth,
+                    icon: const Icon(Icons.chevron_right,
+                        color: Colors.white70),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 16),
 
             // --- Weekday Headers ---
             Row(
@@ -492,11 +548,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         child: Center(
                           child: Text(
                             day,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
-                              color: colorScheme.onSurface
-                                  .withOpacity(0.5),
+                              color: Colors.white38,
                             ),
                           ),
                         ),
@@ -506,112 +561,123 @@ class _CalendarScreenState extends State<CalendarScreen> {
             const SizedBox(height: 8),
 
             // --- Calendar Grid ---
-            GridView.builder(
-              shrinkWrap: true,
-              physics:
-                  const NeverScrollableScrollPhysics(),
-              gridDelegate:
-                  const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                childAspectRatio: 0.85,
-                mainAxisSpacing: 4,
-                crossAxisSpacing: 4,
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [_cardBg, _cardBg2]),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                    color: _purple.withOpacity(0.3)),
               ),
-              itemCount: days.length,
-              itemBuilder: (context, index) {
-                final day = days[index];
-                if (day == null) return const SizedBox();
+              child: GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate:
+                    const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  childAspectRatio: 0.85,
+                  mainAxisSpacing: 4,
+                  crossAxisSpacing: 4,
+                ),
+                itemCount: days.length,
+                itemBuilder: (context, index) {
+                  final day = days[index];
+                  if (day == null) return const SizedBox();
 
-                final key = _dateKey(day);
-                final minutes =
-                    _practiceData[key] ?? 0;
-                final dayEvents = _events[key] ?? [];
-                final isToday = day.year == today.year &&
-                    day.month == today.month &&
-                    day.day == today.day;
-                final isSelected = key == _selectedDate;
-                final hasPractice = minutes > 0;
-                final hasEvents = dayEvents.isNotEmpty;
+                  final key = _dateKey(day);
+                  final minutes = _practiceData[key] ?? 0;
+                  final dayEvents = _events[key] ?? [];
+                  final isToday = day.year == today.year &&
+                      day.month == today.month &&
+                      day.day == today.day;
+                  final isSelected = key == _selectedDate;
+                  final hasPractice = minutes > 0;
+                  final hasEvents = dayEvents.isNotEmpty;
 
-                return GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedDate = key;
-                      _selectedDayMinutes = minutes;
-                    });
-                  },
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? Colors.deepPurple
-                          : hasPractice
-                              ? _getDayColor(minutes)
-                              : Colors.transparent,
-                      borderRadius:
-                          BorderRadius.circular(8),
-                      border: isToday
-                          ? Border.all(
-                              color: Colors.deepPurple,
-                              width: 2)
-                          : null,
-                    ),
-                    child: Column(
-                      mainAxisAlignment:
-                          MainAxisAlignment.center,
-                      children: [
-                        Text(
-                          '${day.day}',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: isToday
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                            color: isSelected
-                                ? Colors.white
-                                : hasPractice
-                                    ? Colors.white
-                                    : colorScheme
-                                        .onSurface,
-                          ),
-                        ),
-                        if (hasEvents)
-                          Row(
-                            mainAxisAlignment:
-                                MainAxisAlignment.center,
-                            children: dayEvents
-                                .take(3)
-                                .map((e) => Container(
-                                      width: 5,
-                                      height: 5,
-                                      margin: const EdgeInsets
-                                          .symmetric(
-                                          horizontal: 1),
-                                      decoration:
-                                          BoxDecoration(
-                                        color:
-                                            _eventTypeColor(
-                                                e.type),
-                                        shape:
-                                            BoxShape.circle,
-                                      ),
-                                    ))
-                                .toList(),
-                          )
-                        else if (hasPractice &&
-                            !isSelected)
-                          Container(
-                            width: 4,
-                            height: 4,
-                            decoration: const BoxDecoration(
-                              color: Colors.white,
-                              shape: BoxShape.circle,
+                  return GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _selectedDate = key;
+                        _selectedDayMinutes = minutes;
+                      });
+                    },
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? _purple
+                            : hasPractice
+                                ? _getDayColor(minutes)
+                                : Colors.transparent,
+                        borderRadius: BorderRadius.circular(10),
+                        border: isToday
+                            ? Border.all(
+                                color: _purple, width: 2)
+                            : null,
+                        boxShadow: isSelected
+                            ? [
+                                BoxShadow(
+                                  color:
+                                      _purple.withOpacity(0.4),
+                                  blurRadius: 8,
+                                )
+                              ]
+                            : [],
+                      ),
+                      child: Column(
+                        mainAxisAlignment:
+                            MainAxisAlignment.center,
+                        children: [
+                          Text(
+                            '${day.day}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isToday
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                              color: isSelected || hasPractice
+                                  ? Colors.white
+                                  : Colors.white70,
                             ),
                           ),
-                      ],
+                          if (hasEvents)
+                            Row(
+                              mainAxisAlignment:
+                                  MainAxisAlignment.center,
+                              children: dayEvents
+                                  .take(3)
+                                  .map((e) => Container(
+                                        width: 5,
+                                        height: 5,
+                                        margin: const EdgeInsets
+                                            .symmetric(
+                                            horizontal: 1),
+                                        decoration:
+                                            BoxDecoration(
+                                          color:
+                                              _eventTypeColor(
+                                                  e.type),
+                                          shape:
+                                              BoxShape.circle,
+                                        ),
+                                      ))
+                                  .toList(),
+                            )
+                          else if (hasPractice && !isSelected)
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                color: Colors.white,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
             const SizedBox(height: 16),
 
@@ -621,16 +687,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 width: double.infinity,
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color:
-                      Colors.deepPurple.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(16),
+                  gradient: const LinearGradient(
+                      colors: [_cardBg, _cardBg2]),
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                      color: Colors.deepPurple
-                          .withOpacity(0.3)),
+                      color: _purple.withOpacity(0.4)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: _purple.withOpacity(0.15),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
                 child: Column(
-                  crossAxisAlignment:
-                      CrossAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       mainAxisAlignment:
@@ -641,51 +712,83 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           style: const TextStyle(
                             fontWeight: FontWeight.bold,
                             fontSize: 15,
+                            color: Colors.white,
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: () =>
-                              _showAddEventDialog(
-                                  _selectedDate),
-                          icon: const Icon(Icons.add,
-                              size: 16),
-                          label: const Text('Add Event'),
-                          style: TextButton.styleFrom(
-                            foregroundColor:
-                                Colors.deepPurple,
+                        GestureDetector(
+                          onTap: () =>
+                              _showAddEventDialog(_selectedDate),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                  colors: [
+                                    _purple,
+                                    Color(0xFF9B59B6)
+                                  ]),
+                              borderRadius:
+                                  BorderRadius.circular(14),
+                            ),
+                            child: const Row(
+                              children: [
+                                Icon(Icons.add,
+                                    size: 14,
+                                    color: Colors.white),
+                                SizedBox(width: 4),
+                                Text('Add Event',
+                                    style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 12,
+                                        fontWeight:
+                                            FontWeight.w600)),
+                              ],
+                            ),
                           ),
                         ),
                       ],
                     ),
-                    Text(
-                      selectedMinutes == 0
-                          ? 'No practice recorded'
-                          : '$selectedMinutes minutes practiced',
-                      style: TextStyle(
-                        color: colorScheme.onSurface
-                            .withOpacity(0.7),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selectedMinutes > 0
+                            ? _purple.withOpacity(0.2)
+                            : Colors.white.withOpacity(0.05),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        selectedMinutes == 0
+                            ? 'No practice recorded'
+                            : '⏱ $selectedMinutes minutes practiced',
+                        style: TextStyle(
+                          color: selectedMinutes > 0
+                              ? const Color(0xFF9B59B6)
+                              : Colors.white38,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ),
                     if (selectedEvents.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      const Text('Events:',
+                      const SizedBox(height: 14),
+                      const Text('Events',
                           style: TextStyle(
-                              fontWeight:
-                                  FontWeight.bold)),
+                              fontWeight: FontWeight.bold,
+                              color: Colors.white,
+                              fontSize: 14)),
                       const SizedBox(height: 8),
                       ...selectedEvents.map((event) =>
                           Container(
-                            margin: const EdgeInsets.only(
-                                bottom: 8),
-                            padding:
-                                const EdgeInsets.all(10),
+                            margin:
+                                const EdgeInsets.only(bottom: 8),
+                            padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: _eventTypeColor(
-                                      event.type)
+                              color: _eventTypeColor(event.type)
                                   .withOpacity(0.1),
                               borderRadius:
-                                  BorderRadius.circular(
-                                      10),
+                                  BorderRadius.circular(12),
                               border: Border.all(
                                   color: _eventTypeColor(
                                           event.type)
@@ -693,74 +796,77 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             ),
                             child: Row(
                               children: [
-                                Icon(
-                                    _eventTypeIcon(
-                                        event.type),
-                                    size: 18,
-                                    color:
-                                        _eventTypeColor(
-                                            event.type)),
-                                const SizedBox(width: 8),
+                                Container(
+                                  padding:
+                                      const EdgeInsets.all(8),
+                                  decoration: BoxDecoration(
+                                    color: _eventTypeColor(
+                                            event.type)
+                                        .withOpacity(0.15),
+                                    shape: BoxShape.circle,
+                                  ),
+                                  child: Icon(
+                                      _eventTypeIcon(
+                                          event.type),
+                                      size: 16,
+                                      color: _eventTypeColor(
+                                          event.type)),
+                                ),
+                                const SizedBox(width: 10),
                                 Expanded(
                                   child: Column(
                                     crossAxisAlignment:
-                                        CrossAxisAlignment
-                                            .start,
+                                        CrossAxisAlignment.start,
                                     children: [
                                       Text(
                                         event.title,
                                         style: const TextStyle(
                                             fontWeight:
-                                                FontWeight
-                                                    .bold),
+                                                FontWeight.bold,
+                                            color: Colors.white),
                                       ),
                                       Row(
                                         children: [
                                           Container(
                                             padding: const EdgeInsets
                                                 .symmetric(
-                                                horizontal:
-                                                    6,
-                                                vertical:
-                                                    2),
+                                                horizontal: 6,
+                                                vertical: 2),
                                             decoration:
                                                 BoxDecoration(
-                                              color: _eventTypeColor(
-                                                      event
-                                                          .type)
-                                                  .withOpacity(
-                                                      0.2),
+                                              color:
+                                                  _eventTypeColor(
+                                                          event
+                                                              .type)
+                                                      .withOpacity(
+                                                          0.2),
                                               borderRadius:
                                                   BorderRadius
                                                       .circular(
-                                                          8),
+                                                          6),
                                             ),
                                             child: Text(
                                               _eventTypeLabel(
-                                                  event
-                                                      .type),
+                                                  event.type),
                                               style: TextStyle(
-                                                  fontSize:
-                                                      10,
-                                                  color: _eventTypeColor(
-                                                      event
-                                                          .type)),
+                                                  fontSize: 10,
+                                                  color:
+                                                      _eventTypeColor(
+                                                          event
+                                                              .type)),
                                             ),
                                           ),
-                                          if (event.notes
-                                              .isNotEmpty) ...[
+                                          if (event
+                                              .notes.isNotEmpty) ...[
                                             const SizedBox(
                                                 width: 6),
                                             Expanded(
                                               child: Text(
                                                 event.notes,
-                                                style: TextStyle(
-                                                    fontSize:
-                                                        11,
-                                                    color: colorScheme
-                                                        .onSurface
-                                                        .withOpacity(
-                                                            0.6)),
+                                                style: const TextStyle(
+                                                    fontSize: 11,
+                                                    color: Colors
+                                                        .white54),
                                                 overflow:
                                                     TextOverflow
                                                         .ellipsis,
@@ -792,51 +898,55 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
             // --- Upcoming Events ---
             if (upcomingEvents.isNotEmpty) ...[
-              Align(
+              const Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
                   'Upcoming Events',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: colorScheme.primary,
+                    color: Colors.white,
                   ),
                 ),
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
               ...upcomingEvents.map((event) {
-                final daysUntil = DateTime.parse(event.date)
-                    .difference(today)
-                    .inDays;
+                final daysUntil =
+                    DateTime.parse(event.date)
+                        .difference(today)
+                        .inDays;
+                final color = _eventTypeColor(event.type);
                 return Container(
-                  margin:
-                      const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.all(14),
                   decoration: BoxDecoration(
-                    color: _eventTypeColor(event.type)
-                        .withOpacity(0.08),
-                    borderRadius:
-                        BorderRadius.circular(12),
+                    gradient: LinearGradient(
+                      colors: [
+                        color.withOpacity(0.15),
+                        color.withOpacity(0.08),
+                      ],
+                    ),
+                    borderRadius: BorderRadius.circular(16),
                     border: Border.all(
-                        color: _eventTypeColor(event.type)
-                            .withOpacity(0.3)),
+                        color: color.withOpacity(0.35)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: color.withOpacity(0.1),
+                        blurRadius: 8,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.all(8),
+                        padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color:
-                              _eventTypeColor(event.type)
-                                  .withOpacity(0.15),
-                          borderRadius:
-                              BorderRadius.circular(8),
+                          color: color.withOpacity(0.2),
+                          shape: BoxShape.circle,
                         ),
-                        child: Icon(
-                            _eventTypeIcon(event.type),
-                            size: 20,
-                            color: _eventTypeColor(
-                                event.type)),
+                        child: Icon(_eventTypeIcon(event.type),
+                            size: 20, color: color),
                       ),
                       const SizedBox(width: 12),
                       Expanded(
@@ -847,28 +957,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             Text(
                               event.title,
                               style: const TextStyle(
-                                  fontWeight:
-                                      FontWeight.bold),
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.white),
                             ),
                             Text(
                               '${event.date} • ${_eventTypeLabel(event.type)}',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: colorScheme.onSurface
-                                    .withOpacity(0.6),
-                              ),
+                              style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.white54),
                             ),
                           ],
                         ),
                       ),
                       Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
+                            horizontal: 10, vertical: 5),
                         decoration: BoxDecoration(
-                          color:
-                              _eventTypeColor(event.type),
+                          color: color,
                           borderRadius:
                               BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: color.withOpacity(0.4),
+                              blurRadius: 6,
+                            ),
+                          ],
                         ),
                         child: Text(
                           daysUntil == 0
@@ -891,38 +1004,50 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ],
 
             // --- Legend ---
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text('Practice: ',
-                    style: TextStyle(fontSize: 12)),
-                ...[0.3, 0.5, 0.75, 1.0].map((opacity) =>
-                    Container(
-                      width: 20,
-                      height: 20,
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.deepPurple
-                            .withOpacity(opacity),
-                        borderRadius:
-                            BorderRadius.circular(4),
-                      ),
-                    )),
-                const Text('  Events: ',
-                    style: TextStyle(fontSize: 12)),
-                ...EventType.values.take(3).map((type) =>
-                    Container(
-                      width: 10,
-                      height: 10,
-                      margin: const EdgeInsets.symmetric(
-                          horizontal: 2),
-                      decoration: BoxDecoration(
-                        color: _eventTypeColor(type),
-                        shape: BoxShape.circle,
-                      ),
-                    )),
-              ],
+            Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                    colors: [_cardBg, _cardBg2]),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                    color: _purple.withOpacity(0.2)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text('Practice: ',
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.white54)),
+                  ...[0.3, 0.5, 0.75, 1.0].map((opacity) =>
+                      Container(
+                        width: 18,
+                        height: 18,
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 2),
+                        decoration: BoxDecoration(
+                          color: _purple.withOpacity(opacity),
+                          borderRadius:
+                              BorderRadius.circular(4),
+                        ),
+                      )),
+                  const Text('  Events: ',
+                      style: TextStyle(
+                          fontSize: 11, color: Colors.white54)),
+                  ...EventType.values.take(3).map((type) =>
+                      Container(
+                        width: 10,
+                        height: 10,
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 2),
+                        decoration: BoxDecoration(
+                          color: _eventTypeColor(type),
+                          shape: BoxShape.circle,
+                        ),
+                      )),
+                ],
+              ),
             ),
           ],
         ),

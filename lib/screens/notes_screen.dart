@@ -46,16 +46,20 @@ class _NotesScreenState extends State<NotesScreen> {
   final TextEditingController _titleController = TextEditingController();
   final TextEditingController _contentController = TextEditingController();
 
-  // Note color options
+  static const _purple = Color(0xFF6B21FF);
+  static const _darkBg = Color(0xFF0D0D1A);
+  static const _cardBg = Color(0xFF1A0A4E);
+  static const _cardBg2 = Color(0xFF2D1B69);
+
   final List<Color> _colorOptions = [
-    Colors.deepPurple,
-    Colors.teal,
-    Colors.orange,
-    Colors.pink,
-    Colors.blue,
-    Colors.green,
+    const Color(0xFF6B21FF),
+    const Color(0xFF00BFA5),
+    const Color(0xFFFF6B35),
+    const Color(0xFFE91E8C),
+    const Color(0xFF2196F3),
+    const Color(0xFF4CAF50),
   ];
-  Color _selectedColor = Colors.deepPurple;
+  Color _selectedColor = const Color(0xFF6B21FF);
 
   @override
   void initState() {
@@ -84,15 +88,13 @@ class _NotesScreenState extends State<NotesScreen> {
 
   Future<void> _saveNotes() async {
     final prefs = await SharedPreferences.getInstance();
-    final reversed = _notes.reversed.toList();
     final data =
-        reversed.map((n) => jsonEncode(n.toJson())).toList();
+        _notes.reversed.map((n) => jsonEncode(n.toJson())).toList();
     await prefs.setStringList('lessonNotes', data);
   }
 
   void _addNote() {
     if (_contentController.text.trim().isEmpty) return;
-
     final newNote = Note(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       title: _titleController.text.trim().isEmpty
@@ -102,12 +104,11 @@ class _NotesScreenState extends State<NotesScreen> {
       date: DateTime.now().toString().substring(0, 16),
       color: _selectedColor,
     );
-
     setState(() => _notes.insert(0, newNote));
     _saveNotes();
     _titleController.clear();
     _contentController.clear();
-    _selectedColor = Colors.deepPurple;
+    _selectedColor = _purple;
     Navigator.pop(context);
   }
 
@@ -119,65 +120,103 @@ class _NotesScreenState extends State<NotesScreen> {
   void _showAddNoteDialog() {
     _titleController.clear();
     _contentController.clear();
-    _selectedColor = Colors.deepPurple;
+    _selectedColor = _purple;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('New Note'),
+          backgroundColor: _cardBg,
+          title: const Text('New Note',
+              style: TextStyle(color: Colors.white)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Title
                 TextField(
                   controller: _titleController,
-                  decoration: const InputDecoration(
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
                     labelText: 'Title (optional)',
-                    hintText: 'e.g. Lesson notes - March 20',
-                    border: OutlineInputBorder(),
-                    prefixIcon: Icon(Icons.title),
+                    labelStyle:
+                        const TextStyle(color: Colors.white60),
+                    hintText: 'e.g. Lesson notes - April 12',
+                    hintStyle:
+                        const TextStyle(color: Colors.white30),
+                    prefixIcon: const Icon(Icons.title,
+                        color: Colors.white54),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          const BorderSide(color: _purple),
+                    ),
                   ),
                 ),
                 const SizedBox(height: 12),
-
-                // Content
                 TextField(
                   controller: _contentController,
-                  decoration: const InputDecoration(
+                  style: const TextStyle(color: Colors.white),
+                  decoration: InputDecoration(
                     labelText: 'Note *',
+                    labelStyle:
+                        const TextStyle(color: Colors.white60),
                     hintText:
                         'Write your lesson notes, reminders, ideas...',
-                    border: OutlineInputBorder(),
+                    hintStyle:
+                        const TextStyle(color: Colors.white30),
                     alignLabelWithHint: true,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: BorderSide(
+                          color: _purple.withOpacity(0.4)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          const BorderSide(color: _purple),
+                    ),
                   ),
                   maxLines: 6,
                   autofocus: true,
                 ),
                 const SizedBox(height: 16),
-
-                // Color picker
                 const Align(
                   alignment: Alignment.centerLeft,
-                  child: Text('Color:',
-                      style: TextStyle(fontSize: 14)),
+                  child: Text('Color',
+                      style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white60,
+                          fontWeight: FontWeight.w600)),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
                 Row(
                   mainAxisAlignment:
                       MainAxisAlignment.spaceEvenly,
                   children: _colorOptions.map((color) {
-                    final isSelected =
-                        _selectedColor == color;
+                    final isSelected = _selectedColor == color;
                     return GestureDetector(
                       onTap: () => setDialogState(
                           () => _selectedColor = color),
                       child: AnimatedContainer(
                         duration:
                             const Duration(milliseconds: 150),
-                        width: isSelected ? 36 : 28,
-                        height: isSelected ? 36 : 28,
+                        width: isSelected ? 38 : 28,
+                        height: isSelected ? 38 : 28,
                         decoration: BoxDecoration(
                           color: color,
                           shape: BoxShape.circle,
@@ -190,8 +229,8 @@ class _NotesScreenState extends State<NotesScreen> {
                               ? [
                                   BoxShadow(
                                     color:
-                                        color.withOpacity(0.5),
-                                    blurRadius: 8,
+                                        color.withOpacity(0.6),
+                                    blurRadius: 10,
                                   )
                                 ]
                               : null,
@@ -206,13 +245,16 @@ class _NotesScreenState extends State<NotesScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
+              child: const Text('Cancel',
+                  style: TextStyle(color: Colors.white54)),
             ),
             ElevatedButton(
               onPressed: _addNote,
               style: ElevatedButton.styleFrom(
                 backgroundColor: _selectedColor,
                 foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12)),
               ),
               child: const Text('Save Note'),
             ),
@@ -226,6 +268,7 @@ class _NotesScreenState extends State<NotesScreen> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        backgroundColor: _cardBg,
         title: Row(
           children: [
             Container(
@@ -234,14 +277,20 @@ class _NotesScreenState extends State<NotesScreen> {
               decoration: BoxDecoration(
                 color: note.color,
                 shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                      color: note.color.withOpacity(0.5),
+                      blurRadius: 6)
+                ],
               ),
             ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 10),
             Expanded(
               child: Text(
                 note.title,
                 style: const TextStyle(
-                    fontWeight: FontWeight.bold),
+                    fontWeight: FontWeight.bold,
+                    color: Colors.white),
               ),
             ),
           ],
@@ -253,15 +302,16 @@ class _NotesScreenState extends State<NotesScreen> {
             children: [
               Text(
                 note.date,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade500,
-                ),
+                style: const TextStyle(
+                    fontSize: 12, color: Colors.white38),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Text(
                 note.content,
-                style: const TextStyle(fontSize: 15),
+                style: const TextStyle(
+                    fontSize: 15,
+                    color: Colors.white,
+                    height: 1.5),
               ),
             ],
           ),
@@ -272,7 +322,8 @@ class _NotesScreenState extends State<NotesScreen> {
               Navigator.pop(context);
               _deleteNote(note.id);
             },
-            icon: const Icon(Icons.delete, color: Colors.red),
+            icon: const Icon(Icons.delete_outline,
+                color: Colors.red, size: 18),
             label: const Text('Delete',
                 style: TextStyle(color: Colors.red)),
           ),
@@ -281,6 +332,8 @@ class _NotesScreenState extends State<NotesScreen> {
             style: ElevatedButton.styleFrom(
               backgroundColor: note.color,
               foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: const Text('Close'),
           ),
@@ -291,39 +344,77 @@ class _NotesScreenState extends State<NotesScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-
     return Scaffold(
+      backgroundColor: _darkBg,
       appBar: AppBar(
-        title: const Text('📝 Lesson Notes',
-            style: TextStyle(fontWeight: FontWeight.bold)),
-        backgroundColor: colorScheme.inversePrimary,
+        title: const Text('Lesson Notes',
+            style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_purple, Color(0xFF9B59B6)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: _showAddNoteDialog,
-        backgroundColor: Colors.deepPurple,
+        backgroundColor: _purple,
         child: const Icon(Icons.add, color: Colors.white),
       ),
       body: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 20, 16, 16),
         child: _notes.isEmpty
-            ? Center(
+            ? Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(40),
+                decoration: BoxDecoration(
+                  gradient: const LinearGradient(
+                    colors: [_cardBg, _cardBg2],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  borderRadius: BorderRadius.circular(28),
+                  border: Border.all(
+                      color: _purple.withOpacity(0.3)),
+                ),
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.note_add,
-                        size: 64,
-                        color: colorScheme.onSurface
-                            .withOpacity(0.3)),
-                    const SizedBox(height: 16),
-                    Text(
-                      'No notes yet!\nTap + to add your first lesson note 📝',
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: _purple.withOpacity(0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.note_alt_outlined,
+                        size: 48,
+                        color: Color(0xFF9B59B6),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    const Text(
+                      'No notes yet!',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Tap + to add your first lesson note',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                        color:
-                            colorScheme.onSurface.withOpacity(0.5),
-                        fontSize: 16,
-                      ),
+                          color: Colors.white54, fontSize: 13),
                     ),
                   ],
                 ),
@@ -334,7 +425,7 @@ class _NotesScreenState extends State<NotesScreen> {
                   crossAxisCount: 2,
                   crossAxisSpacing: 12,
                   mainAxisSpacing: 12,
-                  childAspectRatio: 1.1,
+                  childAspectRatio: 1.0,
                 ),
                 itemCount: _notes.length,
                 itemBuilder: (context, index) {
@@ -344,26 +435,48 @@ class _NotesScreenState extends State<NotesScreen> {
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: note.color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(16),
+                        gradient: LinearGradient(
+                          colors: [
+                            note.color.withOpacity(0.25),
+                            note.color.withOpacity(0.12),
+                          ],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius:
+                            BorderRadius.circular(20),
                         border: Border.all(
-                          color: note.color.withOpacity(0.35),
+                          color: note.color.withOpacity(0.45),
                           width: 1.5,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                note.color.withOpacity(0.2),
+                            blurRadius: 10,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
                       ),
                       child: Column(
                         crossAxisAlignment:
                             CrossAxisAlignment.start,
                         children: [
-                          // Title row
                           Row(
                             children: [
                               Container(
-                                width: 10,
-                                height: 10,
+                                width: 8,
+                                height: 8,
                                 decoration: BoxDecoration(
                                   color: note.color,
                                   shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: note.color
+                                          .withOpacity(0.6),
+                                      blurRadius: 4,
+                                    ),
+                                  ],
                                 ),
                               ),
                               const SizedBox(width: 6),
@@ -376,35 +489,41 @@ class _NotesScreenState extends State<NotesScreen> {
                                     color: note.color,
                                   ),
                                   maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                ),
+                              ),
+                              GestureDetector(
+                                onTap: () =>
+                                    _deleteNote(note.id),
+                                child: Icon(
+                                  Icons.close,
+                                  size: 14,
+                                  color: note.color
+                                      .withOpacity(0.6),
                                 ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
-
-                          // Content preview
                           Expanded(
                             child: Text(
                               note.content,
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 12,
-                                color: colorScheme.onSurface
-                                    .withOpacity(0.8),
+                                color: Colors.white70,
+                                height: 1.4,
                               ),
                               maxLines: 4,
                               overflow: TextOverflow.ellipsis,
                             ),
                           ),
                           const SizedBox(height: 6),
-
-                          // Date
                           Text(
                             note.date,
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 10,
-                              color: colorScheme.onSurface
-                                  .withOpacity(0.4),
+                              color: Colors.white30,
                             ),
                           ),
                         ],
