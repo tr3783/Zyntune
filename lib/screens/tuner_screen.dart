@@ -225,11 +225,14 @@ class _TunerScreenState extends State<TunerScreen> {
 
   String _getNoteName(double frequency) {
     if (frequency <= 0) return '--';
-    final semitonesFromA4 =
-        (12 * (math.log(frequency / 440.0) / math.log(2))).round();
-    final noteIndex = ((semitonesFromA4 % 12) + 12) % 12;
-    final octave = ((semitonesFromA4 + 57) ~/ 12);
-    return '${_noteNames[noteIndex]}$octave';
+    const noteNames = [
+      'C', 'C#', 'D', 'D#', 'E', 'F',
+      'F#', 'G', 'G#', 'A', 'A#', 'B'
+    ];
+    final midiNote = (69 + 12 * (math.log(frequency / 440.0) / math.log(2))).round();
+    final noteIndex = midiNote % 12;
+    final octave = (midiNote ~/ 12) - 1;
+    return '${noteNames[noteIndex]}$octave';
   }
 
   double _getCents(double frequency) {
