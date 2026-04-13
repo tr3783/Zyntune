@@ -163,7 +163,7 @@ class _HomeScreenState extends State<HomeScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 DropdownButtonFormField<String>(
-                  value: selectedPiece.isEmpty ? null : selectedPiece,
+                  initialValue: selectedPiece.isEmpty ? null : selectedPiece,
                   decoration: const InputDecoration(
                     labelText: 'Piece (optional)',
                     border: OutlineInputBorder(),
@@ -473,12 +473,7 @@ class _HomeScreenState extends State<HomeScreen> {
               MaterialPageRoute(builder: (_) => const SettingsScreen()),
             ).then((_) => _loadData()),
           ),
-          IconButton(
-            icon: Icon(
-                isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined,
-                color: Colors.white),
-            onPressed: () => ZyntuneApp.of(context)?.toggleTheme(),
-          ),
+          
         ],
       ),
       body: SingleChildScrollView(

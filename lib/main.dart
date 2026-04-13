@@ -122,7 +122,7 @@ class _ZyntuneAppState extends State<ZyntuneApp>
         ),
         useMaterial3: true,
       ),
-      themeMode: _isDarkMode ? ThemeMode.dark : ThemeMode.light,
+      themeMode: ThemeMode.dark,
       home: _onboardingComplete
           ? const HomeScreen()
           : const OnboardingScreen(),
