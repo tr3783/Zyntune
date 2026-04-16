@@ -57,6 +57,8 @@ class TimerService extends ChangeNotifier {
   bool countdownActive = false;
   bool countdownFinished = false;
   VoidCallback? onCountdownFinished;
+  // Called when countdown finishes — timer_screen uses this to save session
+  Future<void> Function(int minutes)? onCountdownSaveSession;
 
   void startCountdown() {
     if (countdownRemaining <= 0) {
@@ -66,7 +68,6 @@ class TimerService extends ChangeNotifier {
     countdownActive = true;
     countdownFinished = false;
     notifyListeners();
-
     _countdownTimer =
         Timer.periodic(const Duration(seconds: 1), (timer) {
       if (countdownRemaining <= 1) {
@@ -74,11 +75,14 @@ class TimerService extends ChangeNotifier {
         countdownRemaining = 0;
         countdownActive = false;
         countdownFinished = true;
-        // Vibrate
         HapticFeedback.heavyImpact();
-        // Play alert sound 3 times
         _playAlertSound();
         notifyListeners();
+        // Save session with countdown duration
+        final minutes = (countdownTotal / 60).floor();
+        if (minutes > 0) {
+          onCountdownSaveSession?.call(minutes);
+        }
         Future.delayed(Duration.zero, () {
           onCountdownFinished?.call();
         });

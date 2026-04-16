@@ -64,6 +64,17 @@ class _TimerScreenState extends State<TimerScreen> {
     _loadSessions();
     _loadObjectives();
     _timerService.addListener(_onTimerUpdate);
+    _timerService.onCountdownSaveSession = (minutes) async {
+      final newSession = PracticeSession(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        date: DateTime.now().toString().substring(0, 16),
+        durationMinutes: minutes,
+        notes: 'Countdown session',
+      );
+      setState(() => _sessions.insert(0, newSession));
+      await _saveSessions();
+      await StreakHelper.updateStreak();
+    };
   }
 
   void _onTimerUpdate() {
