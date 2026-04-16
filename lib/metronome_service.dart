@@ -6,6 +6,7 @@ class MetronomeService extends ChangeNotifier {
   static final MetronomeService _instance =
       MetronomeService._internal();
   factory MetronomeService() => _instance;
+
   MetronomeService._internal() {
     _initPlayers();
   }
@@ -13,7 +14,6 @@ class MetronomeService extends ChangeNotifier {
   int bpm = 120;
   bool isPlaying = false;
   Timer? _timer;
-
   final List<AudioPlayer> _players =
       List.generate(8, (_) => AudioPlayer());
   int _playerIndex = 0;
@@ -34,10 +34,24 @@ class MetronomeService extends ChangeNotifier {
 
   void start() {
     _timer?.cancel();
-    _tick();
+    _playerIndex = 0;
+
+    // Pre-seek all players to eliminate first-beat latency
+    for (final p in _players) {
+      p.seek(Duration.zero);
+    }
+
     final interval =
         Duration(microseconds: (60000000 / bpm).round());
-    _timer = Timer.periodic(interval, (_) => _tick());
+
+    // Small delay to let seeks complete before first tick
+    Future.delayed(const Duration(milliseconds: 50), () {
+      if (isPlaying) {
+        _tick();
+        _timer = Timer.periodic(interval, (_) => _tick());
+      }
+    });
+
     isPlaying = true;
     notifyListeners();
   }
