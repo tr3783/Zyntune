@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import '../auth_service.dart';
 import '../firestore_service.dart';
-import '../push_notification_service.dart';
 import 'assignment_screen.dart';
 
 class StudioScreen extends StatefulWidget {
@@ -292,7 +292,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     } catch (_) { return raw; }
   }
 
-
   void _showReminderDialog(BuildContext context, String studentName) {
     final List<String> presets = [
       "Don't forget to practice today! 🎵",
@@ -335,14 +334,21 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
             ElevatedButton.icon(
               onPressed: selectedIndex == null ? null : () async {
+                final idx = selectedIndex!;
                 Navigator.pop(ctx);
-                await PushNotificationService().notifyReminder(
-                  studentUid: widget.studentUid,
-                  teacherName: 'Your teacher',
-                  message: presets[selectedIndex!],
-                );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reminder sent to $studentName!'), backgroundColor: Colors.green));
+                try {
+                  final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+                  await functions.httpsCallable('sendReminder').call({
+                    'studentUid': widget.studentUid,
+                    'presetIndex': idx,
+                  });
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reminder sent to $studentName!'), backgroundColor: Colors.green));
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to send reminder: $e'), backgroundColor: Colors.red));
+                  }
                 }
               },
               icon: const Icon(Icons.send, size: 16),
@@ -351,64 +357,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardBg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(children: [
-          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: _purple.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.notifications_active_outlined, color: _purple, size: 18)),
-          const SizedBox(width: 10),
-          const Text('Send Reminder', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-        ]),
-        content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Send a friendly nudge to $studentName.', style: const TextStyle(color: Colors.white54, fontSize: 13)),
-          const SizedBox(height: 14),
-          TextField(
-            controller: controller,
-            textCapitalization: TextCapitalization.sentences,
-            style: const TextStyle(color: Colors.white),
-            maxLines: 3,
-            decoration: InputDecoration(
-              hintText: "Don't forget to practice today!",
-              hintStyle: const TextStyle(color: Colors.white30),
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
-              enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
-              focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple)),
-              filled: true,
-              fillColor: Colors.white.withOpacity(0.05),
-            ),
-          ),
-        ]),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
-          ElevatedButton.icon(
-            onPressed: () async {
-              Navigator.pop(ctx);
-              final teacherUid = AuthService().currentUser?.uid;
-              String teacherName = 'Your teacher';
-              if (teacherUid != null) {
-                final doc = await FirebaseFirestore.instance.collection('users').doc(teacherUid).get();
-                teacherName = doc.data()?['name'] as String? ?? teacherName;
-              }
-              await PushNotificationService().notifyReminder(
-                studentUid: widget.studentUid,
-                teacherName: teacherName,
-                message: controller.text,
-              );
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Reminder sent to $studentName!'), backgroundColor: Colors.green));
-              }
-            },
-            icon: const Icon(Icons.send, size: 16),
-            label: const Text('Send'),
-            style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          ),
-        ],
       ),
     );
   }
@@ -435,8 +383,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
             const SizedBox(height: 20),
             const Text('Leave Feedback', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
-
-            // Assignment context
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.white.withOpacity(0.1))),
@@ -603,11 +549,10 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
               Row(children: [_StatBox(emoji: '📅', value: '$totalSessions', label: 'Total Sessions'), const SizedBox(width: 12), _StatBox(emoji: '⏱', value: timeStr, label: 'Total Practice')]),
               const SizedBox(height: 24),
 
-              // --- Since Last Assignment ---
               Row(children: [
                 const Icon(Icons.assignment_turned_in_outlined, color: Color(0xFF00BFA5), size: 18),
                 const SizedBox(width: 8),
-                Text(sinceDate != null ? 'Since Last Assignment (${_formatFullDate(sinceDate)})' : 'Practice Activity', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+                Expanded(child: Text(sinceDate != null ? 'Since Last Assignment (${_formatFullDate(sinceDate)})' : 'Practice Activity', style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white))),
               ]),
               const SizedBox(height: 12),
               Container(
@@ -709,7 +654,6 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 48),
                 itemCount: sessions.length + (sinceDate != null ? 1 : 0),
                 itemBuilder: (context, index) {
-                  // Summary card at top
                   if (sinceDate != null && index == 0) {
                     return Container(
                       margin: const EdgeInsets.only(bottom: 14),

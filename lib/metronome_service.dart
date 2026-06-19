@@ -1,71 +1,71 @@
-import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/services.dart';
 
 class MetronomeService extends ChangeNotifier {
-  static final MetronomeService _instance =
-      MetronomeService._internal();
+  static final MetronomeService _instance = MetronomeService._internal();
   factory MetronomeService() => _instance;
-
   MetronomeService._internal() {
-    _initPlayers();
+    _setupChannel();
   }
+
+  static const _channel = MethodChannel('com.topher.zyntune/metronome');
 
   int bpm = 120;
+  int subdivision = 1; // 1=quarter, 2=8th, 3=triplet, 4=16th
   bool isPlaying = false;
-  Timer? _timer;
-  final List<AudioPlayer> _players =
-      List.generate(8, (_) => AudioPlayer());
-  int _playerIndex = 0;
 
-  Future<void> _initPlayers() async {
-    for (final p in _players) {
-      await p.setReleaseMode(ReleaseMode.stop);
-      await p.setVolume(1.0);
-      await p.setSource(AssetSource('audio/click.wav'));
-    }
-  }
-
-  void _tick() {
-    final player = _players[_playerIndex % _players.length];
-    _playerIndex++;
-    player.seek(Duration.zero).then((_) => player.resume());
-  }
-
-  void start() {
-    _timer?.cancel();
-    _playerIndex = 0;
-
-    // Pre-seek all players to eliminate first-beat latency
-    for (final p in _players) {
-      p.seek(Duration.zero);
-    }
-
-    final interval =
-        Duration(microseconds: (60000000 / bpm).round());
-
-    // Small delay to let seeks complete before first tick
-    Future.delayed(const Duration(milliseconds: 50), () {
-      if (isPlaying) {
-        _tick();
-        _timer = Timer.periodic(interval, (_) => _tick());
+  void _setupChannel() {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'onBeat') {
+        if (isPlaying) notifyListeners();
       }
     });
+  }
 
+  void start() async {
     isPlaying = true;
     notifyListeners();
+    try {
+      await _channel.invokeMethod('start', {
+        'bpm': bpm.toDouble(),
+        'subdivision': subdivision,
+      });
+    } catch (e) {
+      debugPrint('MetronomeService start error: $e');
+    }
   }
 
-  void stop() {
-    _timer?.cancel();
-    _timer = null;
+  void stop() async {
     isPlaying = false;
     notifyListeners();
+    try {
+      await _channel.invokeMethod('stop');
+    } catch (e) {
+      debugPrint('MetronomeService stop error: $e');
+    }
   }
 
-  void updateBpm(int newBpm) {
+  void updateBpm(int newBpm) async {
     bpm = newBpm.clamp(40, 240);
     notifyListeners();
-    if (isPlaying) start();
+    try {
+      if (isPlaying) {
+        await _channel.invokeMethod('updateBpm', bpm.toDouble());
+      }
+    } catch (e) {
+      debugPrint('MetronomeService updateBpm error: $e');
+    }
+  }
+
+  void updateSubdivision(int newSubdivision) async {
+    subdivision = newSubdivision;
+    notifyListeners();
+    try {
+      if (isPlaying) {
+        await _channel.invokeMethod('updateSubdivision', subdivision);
+      }
+    } catch (e) {
+      debugPrint('MetronomeService updateSubdivision error: $e');
+    }
   }
 }

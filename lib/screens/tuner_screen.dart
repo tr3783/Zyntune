@@ -266,7 +266,7 @@ class _TunerScreenState extends State<TunerScreen> {
     final isInTune = _detectedNote != '--' && _cents.abs() < 5;
 
     return Scaffold(
-      backgroundColor: _darkBg,
+      backgroundColor: const Color(0xFF0D0D1A),
       appBar: AppBar(
         title: const Text('Tuner',
             style: TextStyle(

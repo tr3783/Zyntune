@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import '../purchase_service.dart';
+import 'paywall_screen.dart';
 
 enum EventType { recital, audition, lesson, deadline, performance, other }
 
@@ -11,32 +13,15 @@ class CalendarEvent {
   String date;
   String notes;
 
-  CalendarEvent({
-    required this.id,
-    required this.title,
-    required this.type,
-    required this.date,
-    this.notes = '',
-  });
+  CalendarEvent({required this.id, required this.title, required this.type, required this.date, this.notes = ''});
 
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'title': title,
-        'type': type.name,
-        'date': date,
-        'notes': notes,
-      };
+  Map<String, dynamic> toJson() => {'id': id, 'title': title, 'type': type.name, 'date': date, 'notes': notes};
 
-  factory CalendarEvent.fromJson(Map<String, dynamic> json) =>
-      CalendarEvent(
-        id: json['id'],
-        title: json['title'],
-        type: EventType.values.firstWhere(
-            (t) => t.name == (json['type'] ?? 'other'),
-            orElse: () => EventType.other),
-        date: json['date'],
-        notes: json['notes'] ?? '',
-      );
+  factory CalendarEvent.fromJson(Map<String, dynamic> json) => CalendarEvent(
+    id: json['id'], title: json['title'],
+    type: EventType.values.firstWhere((t) => t.name == (json['type'] ?? 'other'), orElse: () => EventType.other),
+    date: json['date'], notes: json['notes'] ?? '',
+  );
 }
 
 class CalendarScreen extends StatefulWidget {
@@ -49,6 +34,7 @@ class CalendarScreen extends StatefulWidget {
 class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _focusedMonth = DateTime.now();
   Map<String, int> _practiceData = {};
+  Map<String, List<Map<String, dynamic>>> _sessionsByDay = {};
   Map<String, List<CalendarEvent>> _events = {};
   int _selectedDayMinutes = 0;
   String _selectedDate = '';
@@ -62,19 +48,32 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void initState() {
     super.initState();
     _loadData();
+    PurchaseService().addListener(_onPurchaseUpdate);
+  }
+
+  @override
+  void dispose() {
+    PurchaseService().removeListener(_onPurchaseUpdate);
+    super.dispose();
+  }
+
+  void _onPurchaseUpdate() {
+    if (mounted) setState(() {});
   }
 
   Future<void> _loadData() async {
     final prefs = await SharedPreferences.getInstance();
-
     final data = prefs.getStringList('practiceSessions') ?? [];
     final Map<String, int> practiceMap = {};
+    final Map<String, List<Map<String, dynamic>>> sessionsByDay = {};
     for (final s in data) {
       try {
         final session = jsonDecode(s) as Map<String, dynamic>;
         final date = (session['date'] as String).substring(0, 10);
         final mins = session['durationMinutes'] as int;
         practiceMap[date] = (practiceMap[date] ?? 0) + mins;
+        sessionsByDay[date] ??= [];
+        sessionsByDay[date]!.add(session);
       } catch (e) {}
     }
 
@@ -97,12 +96,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         final isCompleted = g['isCompleted'] as bool? ?? false;
         if (isCompleted) continue;
         final goalEvent = CalendarEvent(
-          id: 'goal_${g['id']}',
-          title: g['title'] ?? '',
-          type: EventType.deadline,
-          date: dueDate,
-          notes:
-              '${(g['category'] ?? 'weekly').toString().toUpperCase()} GOAL',
+          id: 'goal_${g['id']}', title: g['title'] ?? '',
+          type: EventType.deadline, date: dueDate,
+          notes: '${(g['category'] ?? 'weekly').toString().toUpperCase()} GOAL',
         );
         eventsMap[dueDate] ??= [];
         if (!eventsMap[dueDate]!.any((e) => e.id == goalEvent.id)) {
@@ -111,37 +107,26 @@ class _CalendarScreenState extends State<CalendarScreen> {
       } catch (e) {}
     }
 
-    setState(() {
-      _practiceData = practiceMap;
-      _events = eventsMap;
-    });
+    setState(() { _practiceData = practiceMap; _sessionsByDay = sessionsByDay; _events = eventsMap; });
   }
 
   Future<void> _saveEvents() async {
     final prefs = await SharedPreferences.getInstance();
     final allEvents = _events.values.expand((e) => e).toList();
-    await prefs.setStringList('calendarEvents',
-        allEvents.map((e) => jsonEncode(e.toJson())).toList());
+    await prefs.setStringList('calendarEvents', allEvents.map((e) => jsonEncode(e.toJson())).toList());
   }
 
   List<DateTime?> _getDaysInMonth() {
-    final firstDay =
-        DateTime(_focusedMonth.year, _focusedMonth.month, 1);
-    final lastDay =
-        DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
+    final firstDay = DateTime(_focusedMonth.year, _focusedMonth.month, 1);
+    final lastDay = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final days = <DateTime?>[];
-    for (int i = 1; i < firstDay.weekday; i++) {
-      days.add(null);
-    }
-    for (int i = 1; i <= lastDay.day; i++) {
-      days.add(
-          DateTime(_focusedMonth.year, _focusedMonth.month, i));
-    }
+    final startOffset = firstDay.weekday % 7;
+    for (int i = 0; i < startOffset; i++) days.add(null);
+    for (int i = 1; i <= lastDay.day; i++) days.add(DateTime(_focusedMonth.year, _focusedMonth.month, i));
     return days;
   }
 
-  String _dateKey(DateTime date) =>
-      '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+  String _dateKey(DateTime date) => '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
   Color _getDayColor(int minutes) {
     if (minutes == 0) return Colors.transparent;
@@ -153,76 +138,79 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   Color _eventTypeColor(EventType type) {
     switch (type) {
-      case EventType.recital:
-        return const Color(0xFFE91E8C);
-      case EventType.audition:
-        return const Color(0xFFFF4444);
-      case EventType.lesson:
-        return const Color(0xFF2196F3);
-      case EventType.deadline:
-        return const Color(0xFFFF6B35);
-      case EventType.performance:
-        return const Color(0xFF4CAF50);
-      case EventType.other:
-        return Colors.grey;
+      case EventType.recital: return const Color(0xFFE91E8C);
+      case EventType.audition: return const Color(0xFFFF4444);
+      case EventType.lesson: return const Color(0xFF2196F3);
+      case EventType.deadline: return const Color(0xFFFF6B35);
+      case EventType.performance: return const Color(0xFF4CAF50);
+      case EventType.other: return Colors.grey;
     }
   }
 
   IconData _eventTypeIcon(EventType type) {
     switch (type) {
-      case EventType.recital:
-        return Icons.piano;
-      case EventType.audition:
-        return Icons.record_voice_over;
-      case EventType.lesson:
-        return Icons.school;
-      case EventType.deadline:
-        return Icons.flag;
-      case EventType.performance:
-        return Icons.theater_comedy;
-      case EventType.other:
-        return Icons.event;
+      case EventType.recital: return Icons.piano;
+      case EventType.audition: return Icons.record_voice_over;
+      case EventType.lesson: return Icons.school;
+      case EventType.deadline: return Icons.flag;
+      case EventType.performance: return Icons.theater_comedy;
+      case EventType.other: return Icons.event;
     }
   }
 
-  String _eventTypeLabel(EventType type) =>
-      type.name[0].toUpperCase() + type.name.substring(1);
+  String _eventTypeLabel(EventType type) => type.name[0].toUpperCase() + type.name.substring(1);
 
-  int get _practiceDaysThisMonth {
-    return _practiceData.keys.where((date) {
-      return date.startsWith(
-          '${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}');
-    }).length;
+  static const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+  String _formatFullDate(String dateKey) {
+    try {
+      final parts = dateKey.split('-');
+      final year = int.parse(parts[0]);
+      final month = int.parse(parts[1]);
+      final day = int.parse(parts[2]);
+      return '${_monthNames[month - 1]} $day, $year';
+    } catch (_) {
+      return dateKey;
+    }
   }
+
+  // Returns piece -> total minutes for a given day's sessions
+  Map<String, int> _pieceBreakdown(List<Map<String, dynamic>> sessions) {
+    final Map<String, int> breakdown = {};
+    for (final s in sessions) {
+      final piece = (s['piece'] as String?)?.trim();
+      final mins = s['durationMinutes'] as int? ?? 0;
+      final label = (piece == null || piece.isEmpty) ? 'Free Practice' : piece;
+      breakdown[label] = (breakdown[label] ?? 0) + mins;
+    }
+    return breakdown;
+  }
+
+  // Returns instrument -> total minutes for a given day's sessions
+  Map<String, int> _instrumentBreakdown(List<Map<String, dynamic>> sessions) {
+    final Map<String, int> breakdown = {};
+    for (final s in sessions) {
+      final instrument = (s['instrument'] as String?)?.trim();
+      final mins = s['durationMinutes'] as int? ?? 0;
+      final label = (instrument == null || instrument.isEmpty) ? 'Other' : instrument;
+      breakdown[label] = (breakdown[label] ?? 0) + mins;
+    }
+    return breakdown;
+  }
+
+  int get _practiceDaysThisMonth => _practiceData.keys.where((date) =>
+    date.startsWith('${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}')).length;
 
   int get _totalMinutesThisMonth {
     int total = 0;
     for (final entry in _practiceData.entries) {
-      if (entry.key.startsWith(
-          '${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}')) {
-        total += entry.value;
-      }
+      if (entry.key.startsWith('${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}')) total += entry.value;
     }
     return total;
   }
 
-  void _previousMonth() {
-    setState(() {
-      _focusedMonth =
-          DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-      _selectedDate = '';
-      _selectedDayMinutes = 0;
-    });
-  }
-
-  void _nextMonth() {
-    setState(() {
-      _focusedMonth =
-          DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-      _selectedDate = '';
-      _selectedDayMinutes = 0;
-    });
-  }
+  void _previousMonth() => setState(() { _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1); _selectedDate = ''; _selectedDayMinutes = 0; });
+  void _nextMonth() => setState(() { _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1); _selectedDate = ''; _selectedDayMinutes = 0; });
 
   void _showAddEventDialog(String date) {
     final titleController = TextEditingController();
@@ -234,123 +222,59 @@ class _CalendarScreenState extends State<CalendarScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: _cardBg,
-          title: Text('Add Event — $date',
-              style: const TextStyle(
-                  color: Colors.white, fontSize: 16)),
+          title: Text('Add Event — $date', style: const TextStyle(color: Colors.white, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: titleController,
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    labelText: 'Event Title *',
-                    labelStyle:
-                        const TextStyle(color: Colors.white60),
-                    hintText: 'e.g. Spring Recital',
-                    hintStyle:
-                        const TextStyle(color: Colors.white30),
-                    prefixIcon: const Icon(Icons.event,
-                        color: Colors.white54),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: _purple.withOpacity(0.4)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: _purple.withOpacity(0.4)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: _purple),
-                    ),
+                    labelText: 'Event Title *', labelStyle: const TextStyle(color: Colors.white60),
+                    hintText: 'e.g. Spring Recital', hintStyle: const TextStyle(color: Colors.white30),
+                    prefixIcon: const Icon(Icons.event, color: Colors.white54),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple)),
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Text('Event Type',
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white70)),
+                const Text('Event Type', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white70)),
                 const SizedBox(height: 8),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+                  spacing: 8, runSpacing: 8,
                   children: EventType.values.map((type) {
                     final isSelected = selectedType == type;
                     final color = _eventTypeColor(type);
                     return GestureDetector(
-                      onTap: () => setDialogState(
-                          () => selectedType = type),
+                      onTap: () => setDialogState(() => selectedType = type),
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? color
-                              : color.withOpacity(0.1),
-                          borderRadius:
-                              BorderRadius.circular(20),
-                          border: Border.all(
-                              color: color.withOpacity(0.5)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(_eventTypeIcon(type),
-                                size: 13,
-                                color: isSelected
-                                    ? Colors.white
-                                    : color),
-                            const SizedBox(width: 4),
-                            Text(
-                              _eventTypeLabel(type),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isSelected
-                                    ? Colors.white
-                                    : color,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(color: isSelected ? color : color.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: color.withOpacity(0.5))),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          Icon(_eventTypeIcon(type), size: 13, color: isSelected ? Colors.white : color),
+                          const SizedBox(width: 4),
+                          Text(_eventTypeLabel(type), style: TextStyle(fontSize: 12, color: isSelected ? Colors.white : color, fontWeight: FontWeight.bold)),
+                        ]),
                       ),
                     );
                   }).toList(),
                 ),
                 const SizedBox(height: 16),
                 TextField(
+                  textCapitalization: TextCapitalization.sentences,
                   controller: notesController,
                   style: const TextStyle(color: Colors.white),
                   decoration: InputDecoration(
-                    labelText: 'Notes (optional)',
-                    labelStyle:
-                        const TextStyle(color: Colors.white60),
-                    hintText: 'e.g. Wear formal attire',
-                    hintStyle:
-                        const TextStyle(color: Colors.white30),
-                    prefixIcon: const Icon(Icons.notes,
-                        color: Colors.white54),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: _purple.withOpacity(0.4)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide(
-                          color: _purple.withOpacity(0.4)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          const BorderSide(color: _purple),
-                    ),
+                    labelText: 'Notes (optional)', labelStyle: const TextStyle(color: Colors.white60),
+                    hintText: 'e.g. Wear formal attire', hintStyle: const TextStyle(color: Colors.white30),
+                    prefixIcon: const Icon(Icons.notes, color: Colors.white54),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                    enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                    focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple)),
                   ),
                   maxLines: 2,
                 ),
@@ -358,37 +282,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           ),
           actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel',
-                  style: TextStyle(color: Colors.white54)),
-            ),
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
             ElevatedButton(
               onPressed: () {
-                if (titleController.text.trim().isEmpty)
-                  return;
-                final event = CalendarEvent(
-                  id: DateTime.now()
-                      .millisecondsSinceEpoch
-                      .toString(),
-                  title: titleController.text.trim(),
-                  type: selectedType,
-                  date: date,
-                  notes: notesController.text.trim(),
-                );
-                setState(() {
-                  _events[date] ??= [];
-                  _events[date]!.add(event);
-                });
+                if (titleController.text.trim().isEmpty) return;
+                final event = CalendarEvent(id: DateTime.now().millisecondsSinceEpoch.toString(), title: titleController.text.trim(), type: selectedType, date: date, notes: notesController.text.trim());
+                setState(() { _events[date] ??= []; _events[date]!.add(event); });
                 _saveEvents();
                 Navigator.pop(context);
               },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _purple,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
+              style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: const Text('Add Event'),
             ),
           ],
@@ -400,657 +303,346 @@ class _CalendarScreenState extends State<CalendarScreen> {
   void _deleteEvent(CalendarEvent event) {
     setState(() {
       _events[event.date]?.remove(event);
-      if (_events[event.date]?.isEmpty ?? false) {
-        _events.remove(event.date);
-      }
+      if (_events[event.date]?.isEmpty ?? false) _events.remove(event.date);
     });
     _saveEvents();
   }
 
   @override
   Widget build(BuildContext context) {
-    final days = _getDaysInMonth();
-    final today = DateTime.now();
-    const weekdays = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-    const months = [
-      'January', 'February', 'March', 'April', 'May',
-      'June', 'July', 'August', 'September', 'October',
-      'November', 'December'
-    ];
-
-    final selectedEvents = _events[_selectedDate] ?? [];
-    final selectedMinutes = _practiceData[_selectedDate] ?? 0;
-
-    final todayStr = _dateKey(today);
-    final upcomingEvents = _events.entries
-        .where((e) =>
-            e.key.startsWith(
-                '${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}') &&
-            e.key.compareTo(todayStr) >= 0)
-        .expand((e) => e.value)
-        .toList()
-      ..sort((a, b) => a.date.compareTo(b.date));
+    final isPro = PurchaseService().isPro;
 
     return Scaffold(
       backgroundColor: _darkBg,
       appBar: AppBar(
-        title: const Text('Practice Calendar',
-            style: TextStyle(
-                fontWeight: FontWeight.bold,
-                color: Colors.white)),
+        title: const Text('Practice Calendar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
-        flexibleSpace: Container(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [_purple, Color(0xFF9B59B6)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-          ),
-        ),
+        flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [_purple, Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight))),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
+      body: isPro ? _buildCalendar(context) : _buildProGate(context),
+    );
+  }
+
+  Widget _buildProGate(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
         child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-
-            // --- Month Summary ---
             Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(color: _purple.withOpacity(0.15), shape: BoxShape.circle),
+              child: const Text('📅', style: TextStyle(fontSize: 56)),
+            ),
+            const SizedBox(height: 24),
+            const Text('Practice Calendar', style: TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 12),
+            const Text(
+              'Track your practice history, schedule recitals, lessons, and deadlines with the Practice Calendar.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.white54, fontSize: 14, height: 1.5),
+            ),
+            const SizedBox(height: 32),
+            SizedBox(
               width: double.infinity,
-              padding: const EdgeInsets.all(18),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [_purple, Color(0xFF9B59B6)],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
+              child: ElevatedButton(
+                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _purple,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: [
-                  BoxShadow(
-                    color: _purple.withOpacity(0.35),
-                    blurRadius: 16,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _MonthStat(
-                    label: 'Days Practiced',
-                    value: '$_practiceDaysThisMonth',
-                    icon: Icons.calendar_today_outlined,
-                  ),
-                  Container(
-                      width: 1, height: 40, color: Colors.white24),
-                  _MonthStat(
-                    label: 'Total Minutes',
-                    value: '$_totalMinutesThisMonth',
-                    icon: Icons.timer_outlined,
-                  ),
-                  Container(
-                      width: 1, height: 40, color: Colors.white24),
-                  _MonthStat(
-                    label: 'Total Hours',
-                    value:
-                        '${(_totalMinutesThisMonth / 60).toStringAsFixed(1)}',
-                    icon: Icons.star_outline,
-                  ),
-                ],
+                child: const Text('Start Free Trial', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
               ),
             ),
-            const SizedBox(height: 20),
-
-            // --- Month Navigation ---
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [_cardBg, _cardBg2]),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: _purple.withOpacity(0.3)),
-              ),
-              child: Row(
-                mainAxisAlignment:
-                    MainAxisAlignment.spaceBetween,
-                children: [
-                  IconButton(
-                    onPressed: _previousMonth,
-                    icon: const Icon(Icons.chevron_left,
-                        color: Colors.white70),
-                  ),
-                  Text(
-                    '${months[_focusedMonth.month - 1]} ${_focusedMonth.year}',
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                  IconButton(
-                    onPressed: _nextMonth,
-                    icon: const Icon(Icons.chevron_right,
-                        color: Colors.white70),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // --- Weekday Headers ---
-            Row(
-              children: weekdays
-                  .map((day) => Expanded(
-                        child: Center(
-                          child: Text(
-                            day,
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white38,
-                            ),
-                          ),
-                        ),
-                      ))
-                  .toList(),
-            ),
-            const SizedBox(height: 8),
-
-            // --- Calendar Grid ---
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [_cardBg, _cardBg2]),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                    color: _purple.withOpacity(0.3)),
-              ),
-              child: GridView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                gridDelegate:
-                    const SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: 7,
-                  childAspectRatio: 0.85,
-                  mainAxisSpacing: 4,
-                  crossAxisSpacing: 4,
-                ),
-                itemCount: days.length,
-                itemBuilder: (context, index) {
-                  final day = days[index];
-                  if (day == null) return const SizedBox();
-
-                  final key = _dateKey(day);
-                  final minutes = _practiceData[key] ?? 0;
-                  final dayEvents = _events[key] ?? [];
-                  final isToday = day.year == today.year &&
-                      day.month == today.month &&
-                      day.day == today.day;
-                  final isSelected = key == _selectedDate;
-                  final hasPractice = minutes > 0;
-                  final hasEvents = dayEvents.isNotEmpty;
-
-                  return GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _selectedDate = key;
-                        _selectedDayMinutes = minutes;
-                      });
-                    },
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: isSelected
-                            ? _purple
-                            : hasPractice
-                                ? _getDayColor(minutes)
-                                : Colors.transparent,
-                        borderRadius: BorderRadius.circular(10),
-                        border: isToday
-                            ? Border.all(
-                                color: _purple, width: 2)
-                            : null,
-                        boxShadow: isSelected
-                            ? [
-                                BoxShadow(
-                                  color:
-                                      _purple.withOpacity(0.4),
-                                  blurRadius: 8,
-                                )
-                              ]
-                            : [],
-                      ),
-                      child: Column(
-                        mainAxisAlignment:
-                            MainAxisAlignment.center,
-                        children: [
-                          Text(
-                            '${day.day}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: isToday
-                                  ? FontWeight.bold
-                                  : FontWeight.normal,
-                              color: isSelected || hasPractice
-                                  ? Colors.white
-                                  : Colors.white70,
-                            ),
-                          ),
-                          if (hasEvents)
-                            Row(
-                              mainAxisAlignment:
-                                  MainAxisAlignment.center,
-                              children: dayEvents
-                                  .take(3)
-                                  .map((e) => Container(
-                                        width: 5,
-                                        height: 5,
-                                        margin: const EdgeInsets
-                                            .symmetric(
-                                            horizontal: 1),
-                                        decoration:
-                                            BoxDecoration(
-                                          color:
-                                              _eventTypeColor(
-                                                  e.type),
-                                          shape:
-                                              BoxShape.circle,
-                                        ),
-                                      ))
-                                  .toList(),
-                            )
-                          else if (hasPractice && !isSelected)
-                            Container(
-                              width: 4,
-                              height: 4,
-                              decoration: const BoxDecoration(
-                                color: Colors.white,
-                                shape: BoxShape.circle,
-                              ),
-                            ),
-                        ],
-                      ),
-                    ),
-                  );
-                },
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // --- Selected Day Info ---
-            if (_selectedDate.isNotEmpty) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                      colors: [_cardBg, _cardBg2]),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                      color: _purple.withOpacity(0.4)),
-                  boxShadow: [
-                    BoxShadow(
-                      color: _purple.withOpacity(0.15),
-                      blurRadius: 12,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment:
-                          MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _selectedDate,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 15,
-                            color: Colors.white,
-                          ),
-                        ),
-                        GestureDetector(
-                          onTap: () =>
-                              _showAddEventDialog(_selectedDate),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: const LinearGradient(
-                                  colors: [
-                                    _purple,
-                                    Color(0xFF9B59B6)
-                                  ]),
-                              borderRadius:
-                                  BorderRadius.circular(14),
-                            ),
-                            child: const Row(
-                              children: [
-                                Icon(Icons.add,
-                                    size: 14,
-                                    color: Colors.white),
-                                SizedBox(width: 4),
-                                Text('Add Event',
-                                    style: TextStyle(
-                                        color: Colors.white,
-                                        fontSize: 12,
-                                        fontWeight:
-                                            FontWeight.w600)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: selectedMinutes > 0
-                            ? _purple.withOpacity(0.2)
-                            : Colors.white.withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        selectedMinutes == 0
-                            ? 'No practice recorded'
-                            : '⏱ $selectedMinutes minutes practiced',
-                        style: TextStyle(
-                          color: selectedMinutes > 0
-                              ? const Color(0xFF9B59B6)
-                              : Colors.white38,
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ),
-                    if (selectedEvents.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      const Text('Events',
-                          style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              color: Colors.white,
-                              fontSize: 14)),
-                      const SizedBox(height: 8),
-                      ...selectedEvents.map((event) =>
-                          Container(
-                            margin:
-                                const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: _eventTypeColor(event.type)
-                                  .withOpacity(0.1),
-                              borderRadius:
-                                  BorderRadius.circular(12),
-                              border: Border.all(
-                                  color: _eventTypeColor(
-                                          event.type)
-                                      .withOpacity(0.4)),
-                            ),
-                            child: Row(
-                              children: [
-                                Container(
-                                  padding:
-                                      const EdgeInsets.all(8),
-                                  decoration: BoxDecoration(
-                                    color: _eventTypeColor(
-                                            event.type)
-                                        .withOpacity(0.15),
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: Icon(
-                                      _eventTypeIcon(
-                                          event.type),
-                                      size: 16,
-                                      color: _eventTypeColor(
-                                          event.type)),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        event.title,
-                                        style: const TextStyle(
-                                            fontWeight:
-                                                FontWeight.bold,
-                                            color: Colors.white),
-                                      ),
-                                      Row(
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets
-                                                .symmetric(
-                                                horizontal: 6,
-                                                vertical: 2),
-                                            decoration:
-                                                BoxDecoration(
-                                              color:
-                                                  _eventTypeColor(
-                                                          event
-                                                              .type)
-                                                      .withOpacity(
-                                                          0.2),
-                                              borderRadius:
-                                                  BorderRadius
-                                                      .circular(
-                                                          6),
-                                            ),
-                                            child: Text(
-                                              _eventTypeLabel(
-                                                  event.type),
-                                              style: TextStyle(
-                                                  fontSize: 10,
-                                                  color:
-                                                      _eventTypeColor(
-                                                          event
-                                                              .type)),
-                                            ),
-                                          ),
-                                          if (event
-                                              .notes.isNotEmpty) ...[
-                                            const SizedBox(
-                                                width: 6),
-                                            Expanded(
-                                              child: Text(
-                                                event.notes,
-                                                style: const TextStyle(
-                                                    fontSize: 11,
-                                                    color: Colors
-                                                        .white54),
-                                                overflow:
-                                                    TextOverflow
-                                                        .ellipsis,
-                                              ),
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.delete_outline,
-                                      size: 16,
-                                      color: Colors.red),
-                                  onPressed: () =>
-                                      _deleteEvent(event),
-                                ),
-                              ],
-                            ),
-                          )),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-
-            // --- Upcoming Events ---
-            if (upcomingEvents.isNotEmpty) ...[
-              const Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Upcoming Events',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              ...upcomingEvents.map((event) {
-                final daysUntil =
-                    DateTime.parse(event.date)
-                        .difference(today)
-                        .inDays;
-                final color = _eventTypeColor(event.type);
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        color.withOpacity(0.15),
-                        color.withOpacity(0.08),
-                      ],
-                    ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(
-                        color: color.withOpacity(0.35)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: color.withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 3),
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: color.withOpacity(0.2),
-                          shape: BoxShape.circle,
-                        ),
-                        child: Icon(_eventTypeIcon(event.type),
-                            size: 20, color: color),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment:
-                              CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              event.title,
-                              style: const TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.white),
-                            ),
-                            Text(
-                              '${event.date} • ${_eventTypeLabel(event.type)}',
-                              style: const TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.white54),
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: color,
-                          borderRadius:
-                              BorderRadius.circular(12),
-                          boxShadow: [
-                            BoxShadow(
-                              color: color.withOpacity(0.4),
-                              blurRadius: 6,
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          daysUntil == 0
-                              ? 'Today!'
-                              : daysUntil == 1
-                                  ? 'Tomorrow'
-                                  : '$daysUntil days',
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              }),
-              const SizedBox(height: 16),
-            ],
-
-            // --- Legend ---
-            Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 16, vertical: 12),
-              decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                    colors: [_cardBg, _cardBg2]),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(
-                    color: _purple.withOpacity(0.2)),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Text('Practice: ',
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.white54)),
-                  ...[0.3, 0.5, 0.75, 1.0].map((opacity) =>
-                      Container(
-                        width: 18,
-                        height: 18,
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: _purple.withOpacity(opacity),
-                          borderRadius:
-                              BorderRadius.circular(4),
-                        ),
-                      )),
-                  const Text('  Events: ',
-                      style: TextStyle(
-                          fontSize: 11, color: Colors.white54)),
-                  ...EventType.values.take(3).map((type) =>
-                      Container(
-                        width: 10,
-                        height: 10,
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 2),
-                        decoration: BoxDecoration(
-                          color: _eventTypeColor(type),
-                          shape: BoxShape.circle,
-                        ),
-                      )),
-                ],
-              ),
-            ),
+            const SizedBox(height: 12),
+            const Text('7-day free trial • Cancel anytime', style: TextStyle(color: Colors.white38, fontSize: 12)),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildCalendar(BuildContext context) {
+    final days = _getDaysInMonth();
+    final today = DateTime.now();
+    const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+    final selectedEvents = _events[_selectedDate] ?? [];
+    final selectedMinutes = _practiceData[_selectedDate] ?? 0;
+    final todayStr = _dateKey(today);
+    final upcomingEvents = _events.entries
+        .where((e) => e.key.startsWith('${_focusedMonth.year}-${_focusedMonth.month.toString().padLeft(2, '0')}') && e.key.compareTo(todayStr) >= 0)
+        .expand((e) => e.value).toList()..sort((a, b) => a.date.compareTo(b.date));
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 20, 16, 48),
+      child: Column(
+        children: [
+          // --- Month Summary ---
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [_purple, Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: _purple.withOpacity(0.35), blurRadius: 16, offset: const Offset(0, 6))],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _MonthStat(label: 'Days Practiced', value: '$_practiceDaysThisMonth', icon: Icons.calendar_today_outlined),
+                Container(width: 1, height: 40, color: Colors.white24),
+                _MonthStat(label: 'Total Minutes', value: '$_totalMinutesThisMonth', icon: Icons.timer_outlined),
+                Container(width: 1, height: 40, color: Colors.white24),
+                _MonthStat(label: 'Total Hours', value: '${(_totalMinutesThisMonth / 60).toStringAsFixed(1)}', icon: Icons.star_outline),
+              ],
+            ),
+          ),
+          const SizedBox(height: 20),
+
+          // --- Month Navigation ---
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [_cardBg, _cardBg2]), borderRadius: BorderRadius.circular(20), border: Border.all(color: _purple.withOpacity(0.3))),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                IconButton(onPressed: _previousMonth, icon: const Icon(Icons.chevron_left, color: Colors.white70)),
+                Text('${months[_focusedMonth.month - 1]} ${_focusedMonth.year}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white)),
+                IconButton(onPressed: _nextMonth, icon: const Icon(Icons.chevron_right, color: Colors.white70)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // --- Weekday Headers ---
+          Row(children: weekdays.map((day) => Expanded(child: Center(child: Text(day, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Colors.white38))))).toList()),
+          const SizedBox(height: 8),
+
+          // --- Calendar Grid ---
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [_cardBg, _cardBg2]), borderRadius: BorderRadius.circular(20), border: Border.all(color: _purple.withOpacity(0.3))),
+            child: GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(crossAxisCount: 7, childAspectRatio: 0.85, mainAxisSpacing: 4, crossAxisSpacing: 4),
+              itemCount: days.length,
+              itemBuilder: (context, index) {
+                final day = days[index];
+                if (day == null) return const SizedBox();
+                final key = _dateKey(day);
+                final minutes = _practiceData[key] ?? 0;
+                final dayEvents = _events[key] ?? [];
+                final isToday = day.year == today.year && day.month == today.month && day.day == today.day;
+                final isSelected = key == _selectedDate;
+                final hasPractice = minutes > 0;
+                final hasEvents = dayEvents.isNotEmpty;
+
+                return GestureDetector(
+                  onTap: () => setState(() { _selectedDate = key; _selectedDayMinutes = minutes; }),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected ? _purple : hasPractice ? _getDayColor(minutes) : Colors.transparent,
+                      borderRadius: BorderRadius.circular(10),
+                      border: isToday ? Border.all(color: _purple, width: 2) : null,
+                      boxShadow: isSelected ? [BoxShadow(color: _purple.withOpacity(0.4), blurRadius: 8)] : [],
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text('${day.day}', style: TextStyle(fontSize: 13, fontWeight: isToday ? FontWeight.bold : FontWeight.normal, color: isSelected || hasPractice ? Colors.white : Colors.white70)),
+                        if (hasEvents)
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: dayEvents.take(3).map((e) => Container(width: 5, height: 5, margin: const EdgeInsets.symmetric(horizontal: 1), decoration: BoxDecoration(color: _eventTypeColor(e.type), shape: BoxShape.circle))).toList(),
+                          )
+                        else if (hasPractice && !isSelected)
+                          Container(width: 4, height: 4, decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle)),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // --- Selected Day Info ---
+          if (_selectedDate.isNotEmpty) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(colors: [_cardBg, _cardBg2]),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: _purple.withOpacity(0.4)),
+                boxShadow: [BoxShadow(color: _purple.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 4))],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(child: Text(_formatFullDate(_selectedDate), style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: Colors.white))),
+                      GestureDetector(
+                        onTap: () => _showAddEventDialog(_selectedDate),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(gradient: const LinearGradient(colors: [_purple, Color(0xFF9B59B6)]), borderRadius: BorderRadius.circular(14)),
+                          child: const Row(children: [
+                            Icon(Icons.add, size: 14, color: Colors.white),
+                            SizedBox(width: 4),
+                            Text('Add Event', style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ]),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(color: selectedMinutes > 0 ? _purple.withOpacity(0.2) : Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(10)),
+                    child: Text(
+                      selectedMinutes == 0 ? 'No practice recorded' : '⏱ $selectedMinutes minutes practiced',
+                      style: TextStyle(color: selectedMinutes > 0 ? const Color(0xFF9B59B6) : Colors.white38, fontSize: 13, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+
+                  // --- Practice breakdown ---
+                  if (selectedMinutes > 0) ...[
+                    Builder(builder: (context) {
+                      final sessions = _sessionsByDay[_selectedDate] ?? [];
+                      final pieceBreakdown = _pieceBreakdown(sessions);
+                      final instrumentBreakdown = _instrumentBreakdown(sessions);
+                      final sortedPieces = pieceBreakdown.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+                      final sortedInstruments = instrumentBreakdown.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+
+                      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                        if (sortedInstruments.length > 1) ...[
+                          const SizedBox(height: 14),
+                          const Text('By Instrument', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                          const SizedBox(height: 8),
+                          ...sortedInstruments.map((e) => Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Row(children: [
+                              const Icon(Icons.piano, size: 14, color: Color(0xFF2196F3)),
+                              const SizedBox(width: 8),
+                              Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                              Text('${e.value} min', style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600)),
+                            ]),
+                          )),
+                        ],
+                        const SizedBox(height: 14),
+                        const Text('By Piece', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 13)),
+                        const SizedBox(height: 8),
+                        ...sortedPieces.map((e) => Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Row(children: [
+                            const Icon(Icons.music_note, size: 14, color: Color(0xFFE91E8C)),
+                            const SizedBox(width: 8),
+                            Expanded(child: Text(e.key, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                            Text('${e.value} min', style: const TextStyle(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600)),
+                          ]),
+                        )),
+                      ]);
+                    }),
+                  ],
+                  if (selectedEvents.isNotEmpty) ...[
+                    const SizedBox(height: 14),
+                    const Text('Events', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    ...selectedEvents.map((event) => Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(color: _eventTypeColor(event.type).withOpacity(0.1), borderRadius: BorderRadius.circular(12), border: Border.all(color: _eventTypeColor(event.type).withOpacity(0.4))),
+                      child: Row(
+                        children: [
+                          Container(padding: const EdgeInsets.all(8), decoration: BoxDecoration(color: _eventTypeColor(event.type).withOpacity(0.15), shape: BoxShape.circle), child: Icon(_eventTypeIcon(event.type), size: 16, color: _eventTypeColor(event.type))),
+                          const SizedBox(width: 10),
+                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                            Row(children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(color: _eventTypeColor(event.type).withOpacity(0.2), borderRadius: BorderRadius.circular(6)),
+                                child: Text(_eventTypeLabel(event.type), style: TextStyle(fontSize: 10, color: _eventTypeColor(event.type))),
+                              ),
+                              if (event.notes.isNotEmpty) ...[
+                                const SizedBox(width: 6),
+                                Expanded(child: Text(event.notes, style: const TextStyle(fontSize: 11, color: Colors.white54), overflow: TextOverflow.ellipsis)),
+                              ],
+                            ]),
+                          ])),
+                          IconButton(icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red), onPressed: () => _deleteEvent(event)),
+                        ],
+                      ),
+                    )),
+                  ],
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // --- Upcoming Events ---
+          if (upcomingEvents.isNotEmpty) ...[
+            const Align(alignment: Alignment.centerLeft, child: Text('Upcoming Events', style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white))),
+            const SizedBox(height: 10),
+            ...upcomingEvents.map((event) {
+              final daysUntil = DateTime.parse(event.date).difference(today).inDays;
+              final color = _eventTypeColor(event.type);
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(colors: [color.withOpacity(0.15), color.withOpacity(0.08)]),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: color.withOpacity(0.35)),
+                  boxShadow: [BoxShadow(color: color.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 3))],
+                ),
+                child: Row(
+                  children: [
+                    Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle), child: Icon(_eventTypeIcon(event.type), size: 20, color: color)),
+                    const SizedBox(width: 12),
+                    Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+                      Text('${event.date} • ${_eventTypeLabel(event.type)}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                    ])),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12), boxShadow: [BoxShadow(color: color.withOpacity(0.4), blurRadius: 6)]),
+                      child: Text(daysUntil == 0 ? 'Today!' : daysUntil == 1 ? 'Tomorrow' : '$daysUntil days', style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 16),
+          ],
+
+          // --- Legend ---
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(gradient: const LinearGradient(colors: [_cardBg, _cardBg2]), borderRadius: BorderRadius.circular(16), border: Border.all(color: _purple.withOpacity(0.2))),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Practice: ', style: TextStyle(fontSize: 11, color: Colors.white54)),
+                ...[0.3, 0.5, 0.75, 1.0].map((opacity) => Container(width: 18, height: 18, margin: const EdgeInsets.symmetric(horizontal: 2), decoration: BoxDecoration(color: _purple.withOpacity(opacity), borderRadius: BorderRadius.circular(4)))),
+                const Text('  Events: ', style: TextStyle(fontSize: 11, color: Colors.white54)),
+                ...EventType.values.take(3).map((type) => Container(width: 10, height: 10, margin: const EdgeInsets.symmetric(horizontal: 2), decoration: BoxDecoration(color: _eventTypeColor(type), shape: BoxShape.circle))),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1060,33 +652,15 @@ class _MonthStat extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-
-  const _MonthStat({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
+  const _MonthStat({required this.label, required this.value, required this.icon});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 18),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-              color: Colors.white70, fontSize: 11),
-        ),
-      ],
-    );
+    return Column(children: [
+      Icon(icon, color: Colors.white70, size: 18),
+      const SizedBox(height: 4),
+      Text(value, style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 11)),
+    ]);
   }
 }

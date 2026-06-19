@@ -4,6 +4,7 @@ class PracticeObjective {
   final String id;
   String pieceName;
   String section;
+  int? targetMinutes;
   List<ChecklistItem> checklistItems;
   bool completed;
 
@@ -11,6 +12,7 @@ class PracticeObjective {
     required this.id,
     this.pieceName = '',
     this.section = '',
+    this.targetMinutes,
     List<ChecklistItem>? checklistItems,
     this.completed = false,
   }) : checklistItems = checklistItems ?? [];
@@ -19,29 +21,24 @@ class PracticeObjective {
         'id': id,
         'pieceName': pieceName,
         'section': section,
-        'checklistItems':
-            checklistItems.map((c) => c.toJson()).toList(),
+        'targetMinutes': targetMinutes,
+        'checklistItems': checklistItems.map((c) => c.toJson()).toList(),
         'completed': completed,
       };
 
-  factory PracticeObjective.fromJson(
-          Map<String, dynamic> json) =>
+  factory PracticeObjective.fromJson(Map<String, dynamic> json) =>
       PracticeObjective(
-        id: json['id'] ??
-            DateTime.now()
-                .millisecondsSinceEpoch
-                .toString(),
+        id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
         pieceName: json['pieceName'] ?? json['songName'] ?? '',
         section: json['section'] ?? '',
-        checklistItems:
-            (json['checklistItems'] as List? ?? [])
-                .map((c) => ChecklistItem.fromJson(c))
-                .toList(),
+        targetMinutes: json['targetMinutes'] as int?,
+        checklistItems: (json['checklistItems'] as List? ?? [])
+            .map((c) => ChecklistItem.fromJson(c))
+            .toList(),
         completed: json['completed'] ?? false,
       );
 
   String toJsonString() => jsonEncode(toJson());
-
   static PracticeObjective fromJsonString(String s) =>
       PracticeObjective.fromJson(jsonDecode(s));
 }
@@ -63,13 +60,8 @@ class ChecklistItem {
         'checked': checked,
       };
 
-  factory ChecklistItem.fromJson(
-          Map<String, dynamic> json) =>
-      ChecklistItem(
-        id: json['id'] ??
-            DateTime.now()
-                .millisecondsSinceEpoch
-                .toString(),
+  factory ChecklistItem.fromJson(Map<String, dynamic> json) => ChecklistItem(
+        id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
         text: json['text'] ?? '',
         checked: json['checked'] ?? false,
       );
