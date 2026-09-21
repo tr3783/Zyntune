@@ -1,12 +1,14 @@
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'purchase_service.dart';
 
 class WidgetService {
   static const _appGroupId = 'group.com.topher.zyntune';
   static const _iOSWidgetName = 'ZyntuneWidget';
 
   /// Call this after saving a session, on app launch, and on app resume
-  static Future<void> updateWidget() async {
+    static Future<void> updateWidget() async {
+    if (!PurchaseService().isPro) return;
     try {
       await HomeWidget.setAppGroupId(_appGroupId);
 

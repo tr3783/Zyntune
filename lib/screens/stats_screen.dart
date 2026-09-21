@@ -137,7 +137,9 @@ class _StatsScreenState extends State<StatsScreen> {
     final sessions = data.map((s) => jsonDecode(s) as Map<String, dynamic>).toList();
 
     int total = 0;
-    for (final s in sessions) total += (s['durationMinutes'] as int);
+    for (final s in sessions) {
+      total += (s['durationMinutes'] as int);
+    }
 
     final instrumentSet = <String>{};
     for (final s in sessions) {
@@ -227,6 +229,15 @@ class _StatsScreenState extends State<StatsScreen> {
     setState(() => _achievements = achievements);
   }
 
+  Future<void> _deleteSession(Map<String, dynamic> session) async {
+    final id = session['id'] as String?;
+    setState(() => _sessions.removeWhere((s) => s['id'] == id));
+    final prefs = await SharedPreferences.getInstance();
+    final updated = _sessions.map((s) => jsonEncode(s)).toList();
+    await prefs.setStringList('practiceSessions', updated);
+    await _loadStats();
+  }
+
   // --- CSV Export ---
   Future<void> _exportCSV() async {
     if (_sessions.isEmpty) return;
@@ -256,14 +267,26 @@ class _StatsScreenState extends State<StatsScreen> {
     );
   }
 
-  List<Map<String, dynamic>> get _filteredSessions {
-    if (_filterInstrument == 'All') return _sessions;
-    return _sessions.where((s) => (s['instrument'] as String? ?? '') == _filterInstrument).toList();
+    List<Map<String, dynamic>> get _filteredSessions {
+    final isPro = PurchaseService().isPro;
+    List<Map<String, dynamic>> sessions;
+    if (_filterInstrument == 'All') {
+      sessions = _sessions;
+    } else {
+      sessions = _sessions.where((s) => (s['instrument'] as String? ?? '') == _filterInstrument).toList();
+    }
+    // Free users see only the 30 most recent sessions
+    if (!isPro && sessions.length > 30) {
+      return sessions.sublist(0, 30);
+    }
+    return sessions;
   }
 
   int get _filteredMinutes {
     int total = 0;
-    for (final s in _filteredSessions) total += (s['durationMinutes'] as int);
+    for (final s in _filteredSessions) {
+      total += (s['durationMinutes'] as int);
+    }
     return total;
   }
 
@@ -272,7 +295,9 @@ class _StatsScreenState extends State<StatsScreen> {
     for (final inst in _instruments) {
       final instSessions = _sessions.where((s) => (s['instrument'] as String? ?? '') == inst).toList();
       int mins = 0;
-      for (final s in instSessions) mins += (s['durationMinutes'] as int);
+      for (final s in instSessions) {
+        mins += (s['durationMinutes'] as int);
+      }
       stats[inst] = {'sessions': instSessions.length, 'minutes': mins, 'hours': mins / 60};
     }
     return stats;
@@ -724,6 +749,22 @@ Keep practicing! 🎸''';
                   ),
               ],
             ),
+            const SizedBox(height: 8),
+            Row(
+  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  children: [
+    const Text('Swipe left to delete a session', style: TextStyle(fontSize: 11, color: Colors.white30)),
+    if (!PurchaseService().isPro && _sessions.length > 30)
+      GestureDetector(
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(color: _purple.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: _purple.withOpacity(0.3))),
+          child: const Text('Showing 30 of your sessions • Upgrade for all ⭐', style: TextStyle(fontSize: 10, color: Color(0xFF9B59B6), fontWeight: FontWeight.w600)),
+        ),
+      ),
+  ],
+),
             const SizedBox(height: 12),
 
             _filteredSessions.isEmpty
@@ -737,24 +778,52 @@ Keep practicing! 🎸''';
                       final inst = session['instrument'] as String? ?? '';
                       final color = inst.isNotEmpty && _instruments.contains(inst) ? _colorForInstrument(inst) : _purple;
                       final displayDate = _formatDisplayDate(session['date'] as String);
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 10),
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(gradient: const LinearGradient(colors: [_cardBg, _cardBg2], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(16), border: Border.all(color: _purple.withOpacity(0.25))),
-                        child: Row(children: [
-                          Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle), child: Icon(Icons.music_note, color: color, size: 18)),
-                          const SizedBox(width: 12),
-                          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                            Row(children: [
-                              Text('${session['durationMinutes']} minutes', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                              if (inst.isNotEmpty) ...[
-                                const SizedBox(width: 8),
-                                Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text(inst, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold))),
+                      return Dismissible(
+                        key: Key(session['id'] as String? ?? '$index'),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          decoration: BoxDecoration(color: Colors.red, borderRadius: BorderRadius.circular(16)),
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        confirmDismiss: (_) async {
+                          return await showDialog<bool>(
+                            context: context,
+                            builder: (ctx) => AlertDialog(
+                              backgroundColor: _cardBg,
+                              title: const Text('Delete Session', style: TextStyle(color: Colors.white)),
+                              content: Text('Delete this ${session['durationMinutes']} min session from $displayDate?', style: const TextStyle(color: Colors.white70)),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+                                ElevatedButton(onPressed: () => Navigator.pop(ctx, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text('Delete')),
                               ],
-                            ]),
-                            Text(session['notes'] != null && session['notes'].isNotEmpty ? '$displayDate • ${session['notes']}' : displayDate, style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          ])),
-                        ]),
+                            ),
+                          ) ?? false;
+                        },
+                        onDismissed: (_) => _deleteSession(session),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(gradient: const LinearGradient(colors: [_cardBg, _cardBg2], begin: Alignment.topLeft, end: Alignment.bottomRight), borderRadius: BorderRadius.circular(16), border: Border.all(color: _purple.withOpacity(0.25))),
+                          child: Row(children: [
+                            Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: color.withOpacity(0.2), shape: BoxShape.circle), child: Icon(Icons.music_note, color: color, size: 18)),
+                            const SizedBox(width: 12),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(children: [
+                                Text('${session['durationMinutes']} minutes', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                                if (inst.isNotEmpty) ...[
+                                  const SizedBox(width: 8),
+                                  Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: color.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text(inst, style: TextStyle(color: color, fontSize: 10, fontWeight: FontWeight.bold))),
+                                ],
+                              ]),
+                              if ((session['piece'] as String? ?? '').isNotEmpty)
+                                Text(session['piece'] as String, style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                              Text(session['notes'] != null && session['notes'].isNotEmpty ? '$displayDate • ${session['notes']}' : displayDate, style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            ])),
+                            const Icon(Icons.swipe_left, size: 14, color: Colors.white24),
+                          ]),
+                        ),
                       );
                     }),
           ],

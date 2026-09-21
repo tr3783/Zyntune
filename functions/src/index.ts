@@ -27,6 +27,72 @@ async function getOneSignalKey(): Promise<string | null> {
   }
 }
 
+async function getResendApiKey(): Promise<string | null> {
+  try {
+    const doc = await db.collection("config").doc("email").get();
+    return doc.data()?.resendApiKey as string | null;
+  } catch {
+    return null;
+  }
+}
+
+async function sendParentEmail({
+  parentEmail,
+  studentName,
+  teacherName,
+  subject,
+  body,
+}: {
+  parentEmail: string;
+  studentName: string;
+  teacherName: string;
+  subject: string;
+  body: string;
+}): Promise<void> {
+  const resendApiKey = await getResendApiKey();
+  if (!resendApiKey) {
+    console.error("No Resend API key found");
+    return;
+  }
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: "Zyntune <notifications@zyntune.com>",
+      to: [parentEmail],
+      subject,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #0D0D1A; color: #ffffff; border-radius: 16px; overflow: hidden;">
+          <div style="background: linear-gradient(135deg, #6B21FF, #9B59B6); padding: 24px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px; font-weight: 900; letter-spacing: 1px;">Zyntune</h1>
+            <p style="margin: 8px 0 0; color: rgba(255,255,255,0.7); font-size: 14px;">Music Practice App</p>
+          </div>
+          <div style="padding: 24px;">
+            <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin: 0 0 16px;">
+              This is an automated notification for the parent or guardian of <strong style="color: #ffffff;">${studentName}</strong>.
+            </p>
+            <div style="background: rgba(107,33,255,0.15); border: 1px solid rgba(107,33,255,0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+              <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #ffffff;">${body}</p>
+            </div>
+            <p style="color: rgba(255,255,255,0.4); font-size: 12px; margin: 0;">
+              Sent by ${teacherName} via Zyntune Studio · <a href="mailto:zyntuneapp@gmail.com" style="color: #00BFA5;">Report a concern</a>
+            </p>
+          </div>
+        </div>
+      `,
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Resend error: ${err}`);
+  }
+}
+
 export const sendReminder = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Must be signed in.");
@@ -42,14 +108,12 @@ export const sendReminder = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "studentUid is required.");
   }
 
-  // Validate preset index
   if (typeof presetIndex !== "number" || presetIndex < 0 || presetIndex >= PRESET_MESSAGES.length) {
     throw new HttpsError("invalid-argument", "Invalid preset message index.");
   }
 
   const message = PRESET_MESSAGES[presetIndex];
 
-  // Verify caller is actually this student's teacher
   const studentDoc = await db.collection("users").doc(studentUid).get();
   if (!studentDoc.exists) {
     throw new HttpsError("not-found", "Student not found.");
@@ -60,11 +124,12 @@ export const sendReminder = onCall(async (request) => {
     throw new HttpsError("permission-denied", "You are not this student's teacher.");
   }
 
-  // Get teacher name
   const teacherDoc = await db.collection("users").doc(teacherUid).get();
   const teacherName = teacherDoc.data()?.name as string | undefined ?? "Your teacher";
+  const studentName = studentData.name as string | undefined ?? "Your child";
+  const parentEmail = studentData.parentEmail as string | undefined ?? "";
 
-  // Log the reminder to Firestore for audit trail
+  // Log the reminder
   await db.collection("users").doc(studentUid).collection("reminders").add({
     teacherUid,
     studentUid,
@@ -74,32 +139,87 @@ export const sendReminder = onCall(async (request) => {
     sentAt: admin.firestore.FieldValue.serverTimestamp(),
   });
 
-  // Get OneSignal key
+  // Send push notification
   const restApiKey = await getOneSignalKey();
-  if (!restApiKey) {
-    throw new HttpsError("internal", "Push notification service not configured.");
+  if (restApiKey) {
+    await fetch("https://onesignal.com/api/v1/notifications", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Basic ${restApiKey}`,
+      },
+      body: JSON.stringify({
+        app_id: ONESIGNAL_APP_ID,
+        target_channel: "push",
+        include_aliases: { external_id: [studentUid] },
+        headings: { en: `👋 Reminder from ${teacherName}` },
+        contents: { en: message },
+        data: { type: "reminder" },
+      }),
+    });
   }
 
-  // Send via OneSignal
-  const response = await fetch("https://onesignal.com/api/v1/notifications", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Basic ${restApiKey}`,
-    },
-    body: JSON.stringify({
-      app_id: ONESIGNAL_APP_ID,
-      target_channel: "push",
-      include_aliases: { external_id: [studentUid] },
-      headings: { en: `👋 Reminder from ${teacherName}` },
-      contents: { en: message },
-      data: { type: "reminder" },
-    }),
-  });
+  // CC parent if email is set
+  if (parentEmail) {
+    try {
+      await sendParentEmail({
+        parentEmail,
+        studentName,
+        teacherName,
+        subject: `Practice reminder for ${studentName} from ${teacherName}`,
+        body: `${teacherName} sent a practice reminder to ${studentName}:<br><br><strong>${message}</strong>`,
+      });
+    } catch (e) {
+      console.error("Parent email failed:", e);
+    }
+  }
 
-  if (!response.ok) {
-    const err = await response.text();
-    throw new HttpsError("internal", `OneSignal error: ${err}`);
+  return { success: true };
+});
+
+export const notifyNewAssignment = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+
+  const teacherUid = request.auth.uid;
+  const { studentUid, assignmentTitle } = request.data as {
+    studentUid: string;
+    assignmentTitle: string;
+  };
+
+  if (!studentUid || !assignmentTitle) {
+    throw new HttpsError("invalid-argument", "studentUid and assignmentTitle are required.");
+  }
+
+  const studentDoc = await db.collection("users").doc(studentUid).get();
+  if (!studentDoc.exists) {
+    throw new HttpsError("not-found", "Student not found.");
+  }
+
+  const studentData = studentDoc.data()!;
+  if (studentData.teacherId !== teacherUid) {
+    throw new HttpsError("permission-denied", "You are not this student's teacher.");
+  }
+
+  const teacherDoc = await db.collection("users").doc(teacherUid).get();
+  const teacherName = teacherDoc.data()?.name as string | undefined ?? "Your teacher";
+  const studentName = studentData.name as string | undefined ?? "Your child";
+  const parentEmail = studentData.parentEmail as string | undefined ?? "";
+
+  // CC parent if email is set
+  if (parentEmail) {
+    try {
+      await sendParentEmail({
+        parentEmail,
+        studentName,
+        teacherName,
+        subject: `New assignment for ${studentName} from ${teacherName}`,
+        body: `${teacherName} assigned new homework to ${studentName}:<br><br><strong>${assignmentTitle}</strong><br><br>Open the Zyntune app to view the full assignment.`,
+      });
+    } catch (e) {
+      console.error("Parent email failed:", e);
+    }
   }
 
   return { success: true };

@@ -71,6 +71,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   List<String> _instruments = ['Guitar'];
   String _activeInstrument = 'Guitar';
   List<String> _pieceNames = [];
+  // Map of piece title -> composer (for grouping in selector)
+  Map<String, String> _pieceComposers = {};
   Set<String> _assignedPieces = {};
   bool _countdownSaveDialogShown = false;
   int _currentStreak = 0;
@@ -92,8 +94,6 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     _loadStreak();
     _timerService.addListener(_onTimerUpdate);
 
-    // Belt-and-suspenders: also tick the UI every second directly,
-    // in case the listener-based update misses ticks after navigation.
     _uiTicker = Timer.periodic(const Duration(seconds: 1), (_) {
       if (mounted && (_timerService.countdownActive || _timerService.isRunning)) {
         setState(() {});
@@ -169,13 +169,23 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   Future<void> _loadPieces() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getStringList('songs') ?? [];
-    final names = data.map((s) {
+    final names = <String>[];
+    final composers = <String, String>{};
+    for (final s in data) {
       try {
         final map = jsonDecode(s) as Map<String, dynamic>;
-        return map['title'] as String? ?? '';
-      } catch (_) { return ''; }
-    }).where((s) => s.isNotEmpty).toList();
-    if (mounted) setState(() => _pieceNames = names);
+        final title = map['title'] as String? ?? '';
+        final composer = map['composer'] as String? ?? '';
+        if (title.isNotEmpty) {
+          names.add(title);
+          composers[title] = composer;
+        }
+      } catch (_) {}
+    }
+    if (mounted) setState(() {
+      _pieceNames = names;
+      _pieceComposers = composers;
+    });
   }
 
   Future<void> _loadAssignedPieces() async {
@@ -265,8 +275,9 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     final streakReminderEnabled = prefs.getBool('streakReminderEnabled') ?? true;
     if (streakReminderEnabled) {
+      // User just practiced — cancel today's reminder.
+      // main.dart will reschedule it on next app launch for tomorrow.
       await NotificationHelper.cancelStreakRiskReminder();
-      await NotificationHelper.scheduleStreakRiskReminder(currentStreak: _currentStreak);
     }
 
     if (mounted) await StreakCelebration.maybeShow(context, _currentStreak);
@@ -305,7 +316,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   }
 
   Widget _buildPieceSelector(List<String> selectedRef, StateSetter setDialogState) {
-    // Merge repertoire pieces with assigned pieces (assigned ones first, then any others)
+    // Build combined list (assigned first, then repertoire, no duplicates)
     final combined = <String>[];
     for (final p in _assignedPieces) {
       if (!combined.contains(p)) combined.add(p);
@@ -314,41 +325,108 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       if (!combined.contains(p)) combined.add(p);
     }
     if (combined.isEmpty) return const SizedBox.shrink();
-    final allOptions = ['', ...combined];
+
+    // Group by composer
+    final Map<String, List<String>> groups = {};
+    for (final name in combined) {
+      final composer = (_pieceComposers[name] ?? '').trim();
+      final groupKey = composer.isEmpty ? 'Other' : composer;
+      groups.putIfAbsent(groupKey, () => []).add(name);
+    }
+    // Sort pieces within each group alphabetically (but keep assigned at top within group)
+    for (final group in groups.values) {
+      group.sort((a, b) {
+        final aAssigned = _assignedPieces.contains(a);
+        final bAssigned = _assignedPieces.contains(b);
+        if (aAssigned && !bAssigned) return -1;
+        if (!aAssigned && bAssigned) return 1;
+        return a.toLowerCase().compareTo(b.toLowerCase());
+      });
+    }
+    // Sort composer groups alphabetically, 'Other' at end
+    final sortedGroups = groups.entries.toList()
+      ..sort((a, b) {
+        if (a.key == 'Other') return 1;
+        if (b.key == 'Other') return -1;
+        return a.key.toLowerCase().compareTo(b.key.toLowerCase());
+      });
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Piece (optional)', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8, runSpacing: 8,
-          children: allOptions.map((name) {
-            final isSelected = selectedRef[0] == name;
-            final label = name.isEmpty ? 'Free practice' : name;
-            final isAssigned = _assignedPieces.contains(name);
-            return GestureDetector(
-              onTap: () => setDialogState(() => selectedRef[0] = name),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  gradient: isSelected ? const LinearGradient(colors: [Color(0xFFE91E8C), Color(0xFF9B59B6)]) : null,
-                  color: isSelected ? null : Colors.white.withOpacity(0.07),
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: isSelected ? Colors.transparent : (isAssigned ? const Color(0xFF00BFA5).withOpacity(0.5) : _purple.withOpacity(0.3))),
-                ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  if (isAssigned) ...[
-                    Icon(Icons.assignment_outlined, size: 12, color: isSelected ? Colors.white : const Color(0xFF00BFA5)),
-                    const SizedBox(width: 4),
-                  ],
-                  Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white60, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal), overflow: TextOverflow.ellipsis),
-                ]),
-              ),
-            );
-          }).toList(),
+
+        // Free practice chip
+        GestureDetector(
+          onTap: () => setDialogState(() => selectedRef[0] = ''),
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              gradient: selectedRef[0] == '' ? const LinearGradient(colors: [Color(0xFFE91E8C), Color(0xFF9B59B6)]) : null,
+              color: selectedRef[0] == '' ? null : Colors.white.withOpacity(0.07),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: selectedRef[0] == '' ? Colors.transparent : _purple.withOpacity(0.3)),
+            ),
+            child: Text('Free practice', style: TextStyle(color: selectedRef[0] == '' ? Colors.white : Colors.white60, fontSize: 12, fontWeight: selectedRef[0] == '' ? FontWeight.bold : FontWeight.normal)),
+          ),
         ),
+
+        // Grouped by composer
+        ...sortedGroups.map((entry) {
+          final composer = entry.key;
+          final pieces = entry.value;
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Composer header
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Text(composer, style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.5)),
+                    const SizedBox(width: 6),
+                    Expanded(child: Container(height: 1, color: Colors.white.withOpacity(0.08))),
+                  ],
+                ),
+              ),
+              // Piece chips
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Wrap(
+                  spacing: 8, runSpacing: 8,
+                  children: pieces.map((name) {
+                    final isSelected = selectedRef[0] == name;
+                    final isAssigned = _assignedPieces.contains(name);
+                    return GestureDetector(
+                      onTap: () => setDialogState(() => selectedRef[0] = name),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          gradient: isSelected ? const LinearGradient(colors: [Color(0xFFE91E8C), Color(0xFF9B59B6)]) : null,
+                          color: isSelected ? null : Colors.white.withOpacity(0.07),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: isSelected ? Colors.transparent : (isAssigned ? const Color(0xFF00BFA5).withOpacity(0.5) : _purple.withOpacity(0.3))),
+                        ),
+                        child: Row(mainAxisSize: MainAxisSize.min, children: [
+                          if (isAssigned) ...[
+                            Icon(Icons.assignment_outlined, size: 12, color: isSelected ? Colors.white : const Color(0xFF00BFA5)),
+                            const SizedBox(width: 4),
+                          ],
+                          Text(name, style: TextStyle(color: isSelected ? Colors.white : Colors.white60, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal), overflow: TextOverflow.ellipsis),
+                        ]),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
+            ],
+          );
+        }),
+
         if (_assignedPieces.isNotEmpty) ...[
-          const SizedBox(height: 8),
+          const SizedBox(height: 4),
           Row(children: [
             const Icon(Icons.assignment_outlined, size: 12, color: Color(0xFF00BFA5)),
             const SizedBox(width: 4),

@@ -3,6 +3,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import '../icloud_sync_service.dart';
+import 'paywall_screen.dart';
+import '../purchase_service.dart';
 
 enum PieceStatus { wishlist, workingOn, performanceReady }
 enum MovementStatus { notStarted, learning, performanceReady }
@@ -83,7 +85,6 @@ class _SongsScreenState extends State<SongsScreen> {
   PieceStatus? _filterStatus;
 
   static const _purple = Color(0xFF6B21FF);
-  static const _darkBg = Color(0xFF0D0D1A);
   static const _cardBg = Color(0xFF1A0A4E);
   static const _cardBg2 = Color(0xFF2D1B69);
 
@@ -166,6 +167,35 @@ class _SongsScreenState extends State<SongsScreen> {
   List<Piece> get _filteredPieces {
     if (_filterStatus == null) return _pieces;
     return _pieces.where((p) => p.status == _filterStatus).toList();
+  }
+
+  Map<String, List<Piece>> get _groupedPieces {
+    final filtered = _filteredPieces;
+    final Map<String, List<Piece>> groups = {};
+    for (final piece in filtered) {
+      final composer = piece.composer.trim().isEmpty ? 'Unknown' : piece.composer.trim();
+      groups.putIfAbsent(composer, () => []).add(piece);
+    }
+    for (final group in groups.values) {
+      group.sort((a, b) => a.title.toLowerCase().compareTo(b.title.toLowerCase()));
+    }
+    return Map.fromEntries(
+      groups.entries.toList()
+        ..sort((a, b) {
+          if (a.key == 'Unknown') return 1;
+          if (b.key == 'Unknown') return -1;
+          return a.key.toLowerCase().compareTo(b.key.toLowerCase());
+        }),
+    );
+  }
+
+  List<dynamic> _buildListItems() {
+    final List<dynamic> items = [];
+    for (final entry in _groupedPieces.entries) {
+      items.add(entry.key);
+      items.addAll(entry.value);
+    }
+    return items;
   }
 
   Future<void> _launchLink(String url) async {
@@ -268,7 +298,31 @@ class _SongsScreenState extends State<SongsScreen> {
     );
   }
 
-  void _showAddPieceDialog() {
+    void _showAddPieceDialog() {
+    if (!PurchaseService().isPro && _pieces.length >= 10) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: _cardBg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+          title: const Column(children: [
+            Text('🎼', style: TextStyle(fontSize: 36)),
+            SizedBox(height: 8),
+            Text('Repertoire Limit Reached', textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
+          ]),
+          content: const Text('Free accounts can store up to 10 pieces. Upgrade to Zyntune Pro for unlimited repertoire.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.5)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not Now', style: TextStyle(color: Colors.white38))),
+            ElevatedButton(
+              onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())); },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B21FF), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: const Text('Upgrade to Pro'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
     final titleController = TextEditingController();
     final composerController = TextEditingController();
     final notesController = TextEditingController();
@@ -525,6 +579,8 @@ class _SongsScreenState extends State<SongsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final listItems = _buildListItems();
+
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
       appBar: AppBar(
@@ -597,12 +653,36 @@ class _SongsScreenState extends State<SongsScreen> {
                       ),
                     )
                   : ListView.builder(
-                      itemCount: _filteredPieces.length,
+                      itemCount: listItems.length,
                       itemBuilder: (context, index) {
-                        final piece = _filteredPieces[index];
+                        final item = listItems[index];
+
+                        // Composer header
+                        if (item is String) {
+                          final count = _groupedPieces[item]?.length ?? 0;
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(4, 16, 4, 8),
+                            child: Row(
+                              children: [
+                                Text(item, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w800)),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(color: const Color(0xFFE91E8C).withOpacity(0.15), borderRadius: BorderRadius.circular(10)),
+                                  child: Text('$count', style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 11, fontWeight: FontWeight.bold)),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(child: Container(height: 1, color: Colors.white.withOpacity(0.08))),
+                              ],
+                            ),
+                          );
+                        }
+
+                        // Piece card
+                        final piece = item as Piece;
                         final color = _statusColor(piece.status);
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
+                          margin: const EdgeInsets.only(bottom: 10),
                           decoration: BoxDecoration(
                             gradient: const LinearGradient(colors: [_cardBg, _cardBg2], begin: Alignment.topLeft, end: Alignment.bottomRight),
                             borderRadius: BorderRadius.circular(18),
@@ -623,7 +703,6 @@ class _SongsScreenState extends State<SongsScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(piece.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                                          if (piece.composer.isNotEmpty) Text(piece.composer, style: const TextStyle(color: Colors.white60, fontSize: 12)),
                                           const SizedBox(height: 4),
                                           Row(
                                             children: [
@@ -686,7 +765,7 @@ class _DetailRow extends StatelessWidget {
   final String value;
   final Color? valueColor;
 
-  const _DetailRow({required this.icon, required this.label, required this.value, this.valueColor});
+    const _DetailRow({required this.icon, required this.label, required this.value, this.valueColor});
 
   @override
   Widget build(BuildContext context) {

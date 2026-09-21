@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'auth_service.dart';
 import 'push_notification_service.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -142,7 +143,7 @@ class FirestoreService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // Notify student
+            // Notify student and CC parent
       try {
         final teacherDoc = await _db.collection('users').doc(uid).get();
         final teacherName = teacherDoc.data()?['name'] as String? ?? 'Your teacher';
@@ -151,6 +152,12 @@ class FirestoreService {
           assignmentTitle: title,
           teacherName: teacherName,
         );
+        // Call Cloud Function to CC parent email
+        final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+        await functions.httpsCallable('notifyNewAssignment').call({
+          'studentUid': studentUid,
+          'assignmentTitle': title,
+        });
       } catch (_) {}
 
       return ref.id;
