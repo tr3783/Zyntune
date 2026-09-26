@@ -147,8 +147,8 @@ class _StreakCelebrationDialogState extends State<_StreakCelebrationDialog>
                     const SizedBox(height: 8),
                     Text(
                       _title,
-                      style: TextStyle(
-                        color: const Color(0xFF9B59B6),
+                      style: const TextStyle(
+                        color: Color(0xFF9B59B6),
                         fontSize: 16,
                         fontWeight: FontWeight.w600,
                       ),

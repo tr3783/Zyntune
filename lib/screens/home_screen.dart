@@ -168,7 +168,19 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     final streakData = await StreakHelper.getStreakData();
-    final userName = prefs.getString('userName') ?? 'Musician';
+        // Load name from Firestore to ensure correct name after login on new device
+    String userName = prefs.getString('userName') ?? 'Musician';
+    try {
+      final uid = AuthService().currentUser?.uid;
+      if (uid != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        final firestoreName = doc.data()?['name'] as String?;
+        if (firestoreName != null && firestoreName.isNotEmpty) {
+          userName = firestoreName;
+          await prefs.setString('userName', firestoreName);
+        }
+      }
+    } catch (_) {}
     final instrumentsList = prefs.getStringList('instruments');
     final legacyInstrument = prefs.getString('instrument') ?? 'Guitar';
     final instruments = instrumentsList != null && instrumentsList.isNotEmpty ? instrumentsList : [legacyInstrument];
@@ -190,7 +202,8 @@ class _HomeScreenState extends State<HomeScreen> {
     final nowReached = todayMins >= dailyGoal && dailyGoal > 0;
     if (!wasReached && nowReached) HapticFeedback.lightImpact();
 
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _totalSessions = data.length;
       _totalMinutes = totalMins;
       _todayMinutes = todayMins;
@@ -206,6 +219,7 @@ class _HomeScreenState extends State<HomeScreen> {
       _objectives = objectives;
       _pieceNames = pieceNames.cast<String>();
     });
+    }
 
     await _maybeShowReportCard(prefs);
   }
@@ -609,8 +623,8 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 20),
 
-            // --- Teacher Assignments (students only) ---
-            if (isStudent) const AssignmentsWidget(),
+                        // --- Teacher Assignments (all users) ---
+            const AssignmentsWidget(),
 
             // --- Today's Objectives ---
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [

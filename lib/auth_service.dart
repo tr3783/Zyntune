@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'push_notification_service.dart';
+import 'firestore_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -40,6 +41,7 @@ class AuthService {
         role: role,
       );
       await _syncLocalDataToFirestore(credential.user!.uid);
+      await FirestoreService().syncFirestoreSessionsToLocal();
       await PushNotificationService().loginUser(credential.user!.uid);
       return credential;
     } on FirebaseAuthException catch (e) {
@@ -58,6 +60,7 @@ class AuthService {
         password: password,
       );
       await _syncLocalDataToFirestore(credential.user!.uid);
+      await FirestoreService().syncFirestoreSessionsToLocal();
       await PushNotificationService().loginUser(credential.user!.uid);
       return credential;
     } on FirebaseAuthException catch (e) {
@@ -102,7 +105,6 @@ class AuthService {
         } catch (_) { return sum; }
       });
 
-      // Update user stats
       await _db.collection('users').doc(uid).update({
         'currentStreak': streak,
         'longestStreak': longestStreak,
@@ -111,7 +113,6 @@ class AuthService {
         'lastSyncedAt': FieldValue.serverTimestamp(),
       });
 
-      // Sync individual sessions to subcollection
       if (sessions.isNotEmpty) {
         final batch = _db.batch();
         for (final s in sessions) {
@@ -132,7 +133,6 @@ class AuthService {
         await batch.commit();
       }
 
-      // Sync repertoire
       final songs = prefs.getStringList('songs') ?? [];
       if (songs.isNotEmpty) {
         final repertoire = songs.map((s) {
@@ -141,7 +141,6 @@ class AuthService {
         await _db.collection('users').doc(uid).update({'repertoire': repertoire});
       }
 
-      // Sync goals
       final goals = prefs.getStringList('longTermGoals') ?? [];
       if (goals.isNotEmpty) {
         final goalsData = goals.map((s) {
@@ -150,7 +149,6 @@ class AuthService {
         await _db.collection('users').doc(uid).update({'goals': goalsData});
       }
 
-      // Sync notes
       final notes = prefs.getStringList('lessonNotes') ?? [];
       if (notes.isNotEmpty) {
         final notesData = notes.map((s) {
@@ -158,9 +156,7 @@ class AuthService {
         }).where((m) => m.isNotEmpty).toList();
         await _db.collection('users').doc(uid).update({'lessonNotes': notesData});
       }
-    } catch (_) {
-      // Fail silently
-    }
+    } catch (_) {}
   }
 
   // --- Get user profile ---

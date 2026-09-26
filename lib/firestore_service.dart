@@ -75,7 +75,65 @@ class FirestoreService {
       await _updateUserStats(uid);
     } catch (_) {}
   }
+  
+  Future<void> syncFirestoreSessionsToLocal() async {
+    final uid = _uid;
+    if (uid == null) return;
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final localData = prefs.getStringList('practiceSessions') ?? [];
 
+      final snapshot = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('sessions')
+          .orderBy('date', descending: true)
+          .get();
+
+      if (snapshot.docs.isEmpty) return;
+
+      final localIds = <String>{};
+      for (final s in localData) {
+        try {
+          final map = jsonDecode(s) as Map<String, dynamic>;
+          localIds.add(map['id'] as String? ?? '');
+        } catch (_) {}
+      }
+
+      final merged = List<String>.from(localData);
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final id = data['id'] as String? ?? doc.id;
+        if (!localIds.contains(id)) {
+          merged.add(jsonEncode({
+            'id': id,
+            'date': data['date'] ?? '',
+            'durationMinutes': data['durationMinutes'] ?? 0,
+            'notes': data['notes'] ?? '',
+            'instrument': data['instrument'] ?? '',
+            'piece': data['piece'] ?? '',
+          }));
+        }
+      }
+
+      merged.sort((a, b) {
+        try {
+          final aDate = jsonDecode(a)['date'] as String;
+          final bDate = jsonDecode(b)['date'] as String;
+          return bDate.compareTo(aDate);
+        } catch (_) { return 0; }
+      });
+
+      await prefs.setStringList('practiceSessions', merged);
+
+      final userDoc = await _db.collection('users').doc(uid).get();
+      final data = userDoc.data();
+      if (data != null) {
+        await prefs.setInt('currentStreak', data['currentStreak'] as int? ?? 0);
+        await prefs.setInt('longestStreak', data['longestStreak'] as int? ?? 0);
+      }
+    } catch (_) {}
+  }
   // ─────────────────────────────────────────
   // USER STATS
   // ─────────────────────────────────────────

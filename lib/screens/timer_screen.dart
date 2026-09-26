@@ -160,10 +160,12 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final instruments = prefs.getStringList('instruments');
     final active = prefs.getString('activeInstrument') ?? 'Guitar';
     final legacy = prefs.getString('instrument') ?? 'Guitar';
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _instruments = instruments != null && instruments.isNotEmpty ? instruments : [legacy];
       _activeInstrument = _instruments.contains(active) ? active : _instruments.first;
     });
+    }
   }
 
   Future<void> _loadPieces() async {
@@ -182,10 +184,12 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         }
       } catch (_) {}
     }
-    if (mounted) setState(() {
+    if (mounted) {
+      setState(() {
       _pieceNames = names;
       _pieceComposers = composers;
     });
+    }
   }
 
   Future<void> _loadAssignedPieces() async {

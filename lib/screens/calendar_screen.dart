@@ -121,8 +121,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final lastDay = DateTime(_focusedMonth.year, _focusedMonth.month + 1, 0);
     final days = <DateTime?>[];
     final startOffset = firstDay.weekday % 7;
-    for (int i = 0; i < startOffset; i++) days.add(null);
-    for (int i = 1; i <= lastDay.day; i++) days.add(DateTime(_focusedMonth.year, _focusedMonth.month, i));
+    for (int i = 0; i < startOffset; i++) {
+      days.add(null);
+    }
+    for (int i = 1; i <= lastDay.day; i++) {
+      days.add(DateTime(_focusedMonth.year, _focusedMonth.month, i));
+    }
     return days;
   }
 
@@ -400,7 +404,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 Container(width: 1, height: 40, color: Colors.white24),
                 _MonthStat(label: 'Total Minutes', value: '$_totalMinutesThisMonth', icon: Icons.timer_outlined),
                 Container(width: 1, height: 40, color: Colors.white24),
-                _MonthStat(label: 'Total Hours', value: '${(_totalMinutesThisMonth / 60).toStringAsFixed(1)}', icon: Icons.star_outline),
+                _MonthStat(label: 'Total Hours', value: (_totalMinutesThisMonth / 60).toStringAsFixed(1), icon: Icons.star_outline),
               ],
             ),
           ),

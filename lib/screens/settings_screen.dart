@@ -142,7 +142,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
-    if (confirm == true) await AuthService().signOut();
+        if (confirm == true) {
+      await AuthService().signOut();
+      if (mounted) {
+        Navigator.of(context).popUntil((route) => route.isFirst);
+      }
+    }
   }
 
   Future<void> _deleteAccount() async {

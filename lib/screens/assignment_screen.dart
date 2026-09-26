@@ -411,9 +411,9 @@ class _PieceCardState extends State<_PieceCard> {
         // Checklist items
         if (widget.piece.checklistItems.isNotEmpty) ...[
           const SizedBox(height: 12),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: const Text('Practice Tasks', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w600)),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16),
+            child: Text('Practice Tasks', style: TextStyle(color: Colors.white38, fontSize: 11, fontWeight: FontWeight.w600)),
           ),
           const SizedBox(height: 6),
           ...widget.piece.checklistItems.asMap().entries.map((entry) => Padding(
