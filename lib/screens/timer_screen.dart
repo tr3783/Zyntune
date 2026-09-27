@@ -615,6 +615,98 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     }
   }
 
+  Future<void> _showLogPastSessionDialog() async {
+    final minutesController = TextEditingController();
+    final notesController = TextEditingController();
+    final instrumentRef = [_activeInstrument];
+    final pieceRef = [''];
+    DateTime selectedDate = DateTime.now();
+
+    await showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          backgroundColor: _cardBg,
+          title: const Text('Log a Past Session', style: TextStyle(color: Colors.white)),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              // Date picker
+              GestureDetector(
+                onTap: () async {
+                  final picked = await showDatePicker(
+                    context: context,
+                    initialDate: selectedDate,
+                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                    lastDate: DateTime.now(),
+                  );
+                  if (picked != null) setDialogState(() => selectedDate = picked);
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(color: _purple.withOpacity(0.15), borderRadius: BorderRadius.circular(12), border: Border.all(color: _purple.withOpacity(0.3))),
+                  child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+                    const Text('Date', style: TextStyle(color: Colors.white70, fontSize: 13)),
+                    Row(children: [
+                      Text('${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      const SizedBox(width: 8),
+                      const Icon(Icons.calendar_today, color: Colors.white54, size: 16),
+                    ]),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 12),
+              // Duration
+              TextField(
+                controller: minutesController,
+                keyboardType: TextInputType.number,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Duration (minutes) *',
+                  labelStyle: const TextStyle(color: Colors.white60),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple)),
+                  prefixIcon: const Icon(Icons.timer_outlined, color: Colors.white54),
+                ),
+              ),
+              const SizedBox(height: 12),
+              _buildInstrumentSelector(instrumentRef, setDialogState),
+              _buildPieceSelector(pieceRef, setDialogState),
+              TextField(
+                textCapitalization: TextCapitalization.sentences,
+                controller: notesController,
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  labelText: 'Notes (optional)',
+                  labelStyle: const TextStyle(color: Colors.white60),
+                  hintText: 'What did you work on?',
+                  hintStyle: const TextStyle(color: Colors.white30),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                  enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
+                  focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple)),
+                ),
+                maxLines: 3,
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+            ElevatedButton(
+              onPressed: () async {
+                final mins = int.tryParse(minutesController.text.trim());
+                if (mins == null || mins <= 0) return;
+                final dateStr = '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')} 00:00';
+                await _saveNewSession(instrumentRef[0], mins * 60, notes: notesController.text.trim(), piece: pieceRef[0]);
+                if (mounted) Navigator.pop(context);
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+              child: const Text('Save Session'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   void _showEditDialog(PracticeSession session) {
     final editNotesController = TextEditingController(text: session.notes);
     final editMinutesController = TextEditingController(text: session.durationMinutes.toString());
@@ -861,7 +953,31 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                   SizedBox(width: double.infinity, child: ElevatedButton.icon(onPressed: _timerService.resetCountdown, icon: const Icon(Icons.refresh_rounded, size: 20), label: const Text('Reset', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)), style: ElevatedButton.styleFrom(backgroundColor: _cardBg, foregroundColor: const Color(0xFF9B59B6), padding: const EdgeInsets.symmetric(vertical: 12), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: _purple.withOpacity(0.4)))))),
                 ]),
               ),
-              const SizedBox(height: 28),
+                            const SizedBox(height: 28),
+
+              // --- Log Past Session ---
+              GestureDetector(
+                onTap: _showLogPastSessionDialog,
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(colors: [_cardBg, _cardBg2]),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: _purple.withOpacity(0.3)),
+                  ),
+                  child: Row(children: [
+                    Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: _purple.withOpacity(0.15), shape: BoxShape.circle), child: const Icon(Icons.edit_calendar_outlined, color: Color(0xFF9B59B6), size: 22)),
+                    const SizedBox(width: 14),
+                    const Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      Text('Log a Past Session', style: TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+                      Text('Forgot to start the timer? Add it manually.', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                    ])),
+                    const Icon(Icons.chevron_right, color: Colors.white24),
+                  ]),
+                ),
+              ),
+              const SizedBox(height: 24),
 
               // --- Recent Sessions ---
               Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
