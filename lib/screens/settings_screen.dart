@@ -7,6 +7,7 @@ import '../purchase_service.dart';
 import '../auth_service.dart';
 import '../icloud_sync_service.dart';
 import 'paywall_screen.dart';
+import 'link_teacher_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -18,6 +19,7 @@ class SettingsScreen extends StatefulWidget {
 class _SettingsScreenState extends State<SettingsScreen> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _parentEmailController = TextEditingController();
+  String _userRole = 'student';
 
   bool _reminderEnabled = false;
   bool _streakReminderEnabled = true;
@@ -54,9 +56,35 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final instrumentsList = prefs.getStringList('instruments');
     final legacyInstrument = prefs.getString('instrument') ?? 'Guitar';
 
+        // Load parent email from Firestore if not in local storage
+    String parentEmail = prefs.getString('parentEmail') ?? '';
+    if (parentEmail.isEmpty) {
+      try {
+        final uid = AuthService().currentUser?.uid;
+        if (uid != null) {
+          final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+          final firestoreEmail = doc.data()?['parentEmail'] as String? ?? '';
+          if (firestoreEmail.isNotEmpty) {
+            parentEmail = firestoreEmail;
+            await prefs.setString('parentEmail', firestoreEmail);
+          }
+        }
+      } catch (_) {}
+
+    // Load user role from Firestore
+    try {
+      final uid = AuthService().currentUser?.uid;
+      if (uid != null) {
+        final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+        final role = doc.data()?['role'] as String? ?? 'student';
+        if (mounted) setState(() => _userRole = role);
+      }
+    } catch (_) {}
+    }
+
     setState(() {
       _nameController.text = prefs.getString('userName') ?? 'Musician';
-      _parentEmailController.text = prefs.getString('parentEmail') ?? '';
+      _parentEmailController.text = parentEmail;
       _selectedInstruments = instrumentsList != null && instrumentsList.isNotEmpty
           ? instrumentsList
           : [legacyInstrument];
@@ -268,7 +296,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
                     enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
                     focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: const BorderSide(color: _purple)),
-                    prefixIcon: const Icon(Icons.family_restroom, color: Colors.white54),
+                                        prefixIcon: const Icon(Icons.family_restroom, color: Colors.white54),
+                    suffixIcon: _parentEmailController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear, color: Colors.white38, size: 18),
+                            onPressed: () async {
+                              setState(() => _parentEmailController.clear());
+                              final prefs = await SharedPreferences.getInstance();
+                              await prefs.setString('parentEmail', '');
+                              final uid = AuthService().currentUser?.uid;
+                              if (uid != null) {
+                                await FirebaseFirestore.instance.collection('users').doc(uid).update({'parentEmail': ''});
+                              }
+                            },
+                          )
+                        : null,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -391,8 +433,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             // --- Account Actions ---
             _SectionHeader(label: 'Account', icon: Icons.manage_accounts_outlined),
             const SizedBox(height: 12),
-            _SettingsCard(
+                        _SettingsCard(
               child: Column(children: [
+                if (_userRole == 'student')
+                  _ActionRow(icon: Icons.school_outlined, label: 'My Teacher / Join Studio', color: const Color(0xFF00BFA5), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LinkTeacherScreen()))),
+                if (_userRole == 'student')
+                  const Divider(color: Colors.white12, height: 20),
                 _ActionRow(icon: Icons.logout, label: 'Sign Out', color: Colors.orange, onTap: _signOut),
                 const Divider(color: Colors.white12, height: 20),
                 _ActionRow(icon: Icons.delete_forever, label: 'Delete Account', color: Colors.red, onTap: _deleteAccount),

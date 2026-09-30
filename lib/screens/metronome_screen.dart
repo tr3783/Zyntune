@@ -276,11 +276,39 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                       ),
                       child: Column(
                         children: [
-                          const Text('B P M', style: TextStyle(fontSize: 14, letterSpacing: 6, color: Color(0xFF9B59B6), fontWeight: FontWeight.w600)),
+                                                   const Text('B P M', style: TextStyle(fontSize: 14, letterSpacing: 6, color: Color(0xFF9B59B6), fontWeight: FontWeight.w600)),
                           const SizedBox(height: 8),
-                          SizedBox(
-                            width: 180,
-                            child: TextField(
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              GestureDetector(
+                                onTap: () {
+                                  final current = _metronomeService.bpm;
+                                  if (current > 40) {
+                                    setState(() {
+                                      _metronomeService.bpm = current - 1;
+                                      _bpmController.text = '${current - 1}';
+                                    });
+                                  }
+                                },
+                                onLongPress: () {
+                                  // Hold to decrease faster
+                                  setState(() {
+                                    final newBpm = (_metronomeService.bpm - 5).clamp(40, 240);
+                                    _metronomeService.bpm = newBpm;
+                                    _bpmController.text = '$newBpm';
+                                  });
+                                },
+                                child: Container(
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(color: _purple.withOpacity(0.2), shape: BoxShape.circle, border: Border.all(color: _purple.withOpacity(0.4))),
+                                  child: const Icon(Icons.remove, color: Colors.white, size: 22),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              SizedBox(
+                                width: 160,
+                                child: TextField(
                               controller: _bpmController,
                               focusNode: _bpmFocusNode,
                               keyboardType: TextInputType.number,
@@ -294,8 +322,34 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                                   setState(() => _metronomeService.bpm = newBpm);
                                 }
                               },
-                              onSubmitted: (_) => _dismissKeyboard(),
+                                                            onSubmitted: (_) => _dismissKeyboard(),
                             ),
+                              ),
+                              const SizedBox(width: 8),
+                              GestureDetector(
+                                onTap: () {
+                                  final current = _metronomeService.bpm;
+                                  if (current < 240) {
+                                    setState(() {
+                                      _metronomeService.bpm = current + 1;
+                                      _bpmController.text = '${current + 1}';
+                                    });
+                                  }
+                                },
+                                onLongPress: () {
+                                  setState(() {
+                                    final newBpm = (_metronomeService.bpm + 5).clamp(40, 240);
+                                    _metronomeService.bpm = newBpm;
+                                    _bpmController.text = '$newBpm';
+                                  });
+                                },
+                                child: Container(
+                                  width: 44, height: 44,
+                                  decoration: BoxDecoration(color: _purple.withOpacity(0.2), shape: BoxShape.circle, border: Border.all(color: _purple.withOpacity(0.4))),
+                                  child: const Icon(Icons.add, color: Colors.white, size: 22),
+                                ),
+                              ),
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Container(
@@ -304,7 +358,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                             child: Text(tempoName, style: const TextStyle(fontSize: 14, color: Color(0xFF9B59B6), fontWeight: FontWeight.w700, letterSpacing: 1)),
                           ),
                           const SizedBox(height: 8),
-                          Text('Tap number to type  •  40–240', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),
+                                                    Text('Tap ±1  •  Hold ±5  •  Tap number to type', style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.3))),
                         ],
                       ),
                     ),

@@ -137,7 +137,7 @@ class NotificationHelper {
       );
       const details = NotificationDetails(android: androidDetails, iOS: iosDetails);
 
-      await _notifications.zonedSchedule(
+            await _notifications.zonedSchedule(
         _streakReminderNotificationId,
         '$streakText 🔥',
         'Practice today to keep your streak going!',
@@ -145,7 +145,6 @@ class NotificationHelper {
         details,
         androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
       );
     } catch (e) {
       // ignore

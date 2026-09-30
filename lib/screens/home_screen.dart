@@ -20,6 +20,7 @@ import 'calendar_screen.dart';
 import 'paywall_screen.dart';
 import 'studio_screen.dart';
 import 'assignments_widget.dart';
+import 'link_teacher_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -672,7 +673,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 _ToolButton(icon: Icons.graphic_eq, label: 'Tuner', color: const Color(0xFF4CAF50), onTap: () => _navigate(context, const TunerScreen())),
                 _ToolButton(icon: Icons.note_alt_outlined, label: 'Notes', color: const Color(0xFF5C6BC0), onTap: () => _navigate(context, const NotesScreen())),
                 _ToolButton(icon: Icons.calendar_month_outlined, label: 'Calendar', color: const Color(0xFF9C27B0), onTap: () => _navigate(context, const CalendarScreen())),
-                if (isTeacher)
+                                if (isTeacher)
                   _BadgeToolButton(
                     icon: Icons.school_outlined,
                     label: 'Studio',
