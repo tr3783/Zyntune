@@ -1,4 +1,4 @@
-package com.example.practice_pilot
+package com.topher.zyntune
 
 import io.flutter.embedding.android.FlutterActivity
 
