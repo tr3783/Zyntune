@@ -182,16 +182,27 @@ class AuthService {
   }
 
   // --- Delete account ---
-    Future<void> deleteAccount() async {
-    final uid = currentUser?.uid;
+  Future<void> deleteAccount() async {
+    const reloginMessage =
+        'For security, please sign out and sign back in before deleting your account.';
+    final user = currentUser;
+    if (user == null) return;
+
+    // Firebase only allows deleting an account shortly after sign-in.
+    // Check this before touching any data so a refused deletion
+    // never leaves the user with an account but no data.
+    final lastSignIn = user.metadata.lastSignInTime;
+    if (lastSignIn == null ||
+        DateTime.now().difference(lastSignIn) > const Duration(minutes: 5)) {
+      throw reloginMessage;
+    }
+
     try {
-      if (uid != null) {
-        await _db.collection('users').doc(uid).delete();
-      }
-      await currentUser?.delete();
+      await _db.collection('users').doc(user.uid).delete();
+      await user.delete();
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
-        throw 'For security, please sign out and sign back in before deleting your account.';
+        throw reloginMessage;
       }
       throw e.message ?? 'Failed to delete account.';
     }
