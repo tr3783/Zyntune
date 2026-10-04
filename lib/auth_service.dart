@@ -198,13 +198,33 @@ class AuthService {
     }
 
     try {
-      await _db.collection('users').doc(user.uid).delete();
+      final userDoc = _db.collection('users').doc(user.uid);
+      // Deleting a document doesn't delete its subcollections,
+      // so remove practice history and assignments explicitly.
+      await _deleteCollection(userDoc.collection('sessions'));
+      await _deleteCollection(userDoc.collection('assignments'));
+      await userDoc.delete();
       await user.delete();
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         throw reloginMessage;
       }
       throw e.message ?? 'Failed to delete account.';
+    } on FirebaseException catch (e) {
+      throw e.message ?? 'Failed to delete account data.';
+    }
+  }
+
+  Future<void> _deleteCollection(CollectionReference collection) async {
+    // Firestore batches are limited to 500 writes.
+    while (true) {
+      final snapshot = await collection.limit(500).get();
+      if (snapshot.docs.isEmpty) return;
+      final batch = _db.batch();
+      for (final doc in snapshot.docs) {
+        batch.delete(doc.reference);
+      }
+      await batch.commit();
     }
   }
 
