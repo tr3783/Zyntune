@@ -182,12 +182,19 @@ class AuthService {
   }
 
   // --- Delete account ---
-  Future<void> deleteAccount() async {
+    Future<void> deleteAccount() async {
     final uid = currentUser?.uid;
-    if (uid != null) {
-      await _db.collection('users').doc(uid).delete();
+    try {
+      if (uid != null) {
+        await _db.collection('users').doc(uid).delete();
+      }
+      await currentUser?.delete();
+    } on FirebaseAuthException catch (e) {
+      if (e.code == 'requires-recent-login') {
+        throw 'For security, please sign out and sign back in before deleting your account.';
+      }
+      throw e.message ?? 'Failed to delete account.';
     }
-    await currentUser?.delete();
   }
 
   // --- Helpers ---

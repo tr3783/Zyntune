@@ -64,13 +64,21 @@ void main() async {
     await PushNotificationService().initialize();
   }
 
-  final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
   final streakReminderEnabled = prefs.getBool('streakReminderEnabled') ?? true;
   if (streakReminderEnabled) {
-    final streakData = await StreakHelper.getStreakData();
-    await NotificationHelper.scheduleStreakRiskReminder(
-      currentStreak: streakData['currentStreak'] ?? 0,
-    );
+    // Only schedule if user hasn't practiced today
+    final todayStr = DateTime.now().toString().substring(0, 10);
+    final sessions = prefs.getStringList('practiceSessions') ?? [];
+    final practicedToday = sessions.any((s) => s.contains(todayStr));
+    if (!practicedToday) {
+      final streakData = await StreakHelper.getStreakData();
+      await NotificationHelper.scheduleStreakRiskReminder(
+        currentStreak: streakData['currentStreak'] ?? 0,
+      );
+    } else {
+      await NotificationHelper.cancelStreakRiskReminder();
+    }
   }
 
   runApp(const ZyntuneApp());
