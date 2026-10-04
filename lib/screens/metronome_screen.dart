@@ -283,21 +283,15 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                             children: [
                               GestureDetector(
                                 onTap: () {
-                                  final current = _metronomeService.bpm;
-                                  if (current > 40) {
-                                    setState(() {
-                                      _metronomeService.bpm = current - 1;
-                                      _bpmController.text = '${current - 1}';
-                                    });
-                                  }
+                                  final newBpm = (_metronomeService.bpm - 1).clamp(40, 240);
+                                  _metronomeService.updateBpm(newBpm);
+                                  setState(() => _bpmController.text = '$newBpm');
                                 },
                                 onLongPress: () {
                                   // Hold to decrease faster
-                                  setState(() {
-                                    final newBpm = (_metronomeService.bpm - 5).clamp(40, 240);
-                                    _metronomeService.bpm = newBpm;
-                                    _bpmController.text = '$newBpm';
-                                  });
+                                  final newBpm = (_metronomeService.bpm - 5).clamp(40, 240);
+                                  _metronomeService.updateBpm(newBpm);
+                                  setState(() => _bpmController.text = '$newBpm');
                                 },
                                 child: Container(
                                   width: 44, height: 44,
@@ -328,20 +322,15 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                               const SizedBox(width: 8),
                               GestureDetector(
                                 onTap: () {
-                                  final current = _metronomeService.bpm;
-                                  if (current < 240) {
-                                    setState(() {
-                                      _metronomeService.bpm = current + 1;
-                                      _bpmController.text = '${current + 1}';
-                                    });
-                                  }
+                                  final newBpm = (_metronomeService.bpm + 1).clamp(40, 240);
+                                  _metronomeService.updateBpm(newBpm);
+                                  setState(() => _bpmController.text = '$newBpm');
                                 },
                                 onLongPress: () {
-                                  setState(() {
-                                    final newBpm = (_metronomeService.bpm + 5).clamp(40, 240);
-                                    _metronomeService.bpm = newBpm;
-                                    _bpmController.text = '$newBpm';
-                                  });
+                                  // Hold to increase faster
+                                  final newBpm = (_metronomeService.bpm + 5).clamp(40, 240);
+                                  _metronomeService.updateBpm(newBpm);
+                                  setState(() => _bpmController.text = '$newBpm');
                                 },
                                 child: Container(
                                   width: 44, height: 44,
