@@ -115,7 +115,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _maybeShowWhatsNew() async {
     final prefs = await SharedPreferences.getInstance();
-    const currentVersion = '2.4.6';
+    const currentVersion = '2.4.9';
     final lastSeenVersion = prefs.getString('lastWhatsNewVersion') ?? '';
     if (lastSeenVersion == currentVersion) return;
     await prefs.setString('lastWhatsNewVersion', currentVersion);
@@ -130,15 +130,15 @@ class _HomeScreenState extends State<HomeScreen> {
         title: const Column(children: [
           Text('🎉', style: TextStyle(fontSize: 36)),
           SizedBox(height: 8),
-          Text("What's New in 2.4.6", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
+          Text("What's New in $currentVersion", textAlign: TextAlign.center, style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
         ]),
                 content: const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Divider(color: Colors.white12),
           SizedBox(height: 12),
-          _WhatsNewRow(emoji: '📅', text: 'Log a past session — forgot to start the timer? Add it manually'),
-          _WhatsNewRow(emoji: '👨‍👩‍👧', text: 'Parent email notifications — parents get a copy of teacher reminders and assignments'),
-          _WhatsNewRow(emoji: '🚩', text: 'Report button — students can report safety concerns directly from assignments'),
-          _WhatsNewRow(emoji: '☁️', text: 'Practice history now syncs across all your devices'),
+          _WhatsNewRow(emoji: '🎵', text: 'Metronome +/- buttons — tap to change tempo by 1, hold for 5, even while playing'),
+          _WhatsNewRow(emoji: '👩‍🏫', text: 'My Teacher — see who you\'re linked with right in Settings'),
+          _WhatsNewRow(emoji: '🔥', text: 'Smarter streak reminders — no reminder if you\'ve already practiced today'),
+          _WhatsNewRow(emoji: '🛠️', text: 'Bug fixes and reliability improvements'),
         ]),
         actions: [
           SizedBox(
