@@ -194,6 +194,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
         if (confirm == true) {
       try {
         await AuthService().deleteAccount();
+        if (mounted) {
+          Navigator.of(context).popUntil((route) => route.isFirst);
+        }
       } catch (e) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -518,6 +521,8 @@ class _ActionRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
+      // Make the whole row tappable, not just the icon and label.
+      behavior: HitTestBehavior.opaque,
       child: Row(children: [
         Icon(icon, color: color, size: 20),
         const SizedBox(width: 12),

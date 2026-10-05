@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'home_screen.dart';
+import '../auth_gate.dart';
 import 'paywall_screen.dart';
 
 class OnboardingScreen extends StatefulWidget {
@@ -60,7 +60,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     await prefs.setString('instrument', _selectedInstruments.first);
     await prefs.setInt('dailyGoalMinutes', _dailyGoalMinutes);
     if (mounted) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const HomeScreen()));
+      // Return to AuthGate (not HomeScreen directly) so sign-out keeps working.
+      Navigator.pushAndRemoveUntil(context, MaterialPageRoute(builder: (_) => const AuthGate()), (_) => false);
     }
   }
 

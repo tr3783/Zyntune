@@ -2,9 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'screens/home_screen.dart';
-import 'screens/onboarding_screen.dart';
-import 'screens/login_screen.dart';
 import 'notification_helper.dart';
 import 'metronome_service.dart';
 import 'timer_service.dart';
@@ -14,6 +11,7 @@ import 'streak_helper.dart';
 import 'widget_service.dart';
 import 'firebase_options.dart';
 import 'push_notification_service.dart';
+import 'auth_gate.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -134,43 +132,7 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
         useMaterial3: true,
       ),
       themeMode: ThemeMode.dark,
-      home: StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Scaffold(
-              backgroundColor: Color(0xFF0D0D1A),
-              body: Center(child: CircularProgressIndicator(color: Color(0xFF6B21FF))),
-            );
-          }
-
-          if (!snapshot.hasData || snapshot.data == null) {
-            return const LoginScreen();
-          }
-
-          // Initialize push notifications for logged in user (once only)
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            PushNotificationService().initialize();
-          });
-
-          return FutureBuilder<bool>(
-            future: SharedPreferences.getInstance()
-                .then((p) => p.getBool('onboardingComplete') ?? false),
-            builder: (context, onboardingSnap) {
-              if (!onboardingSnap.hasData) {
-                return const Scaffold(
-                  backgroundColor: Color(0xFF0D0D1A),
-                  body: Center(child: CircularProgressIndicator(color: Color(0xFF6B21FF))),
-                );
-              }
-              if (!onboardingSnap.data!) {
-                return const OnboardingScreen();
-              }
-              return const HomeScreen();
-            },
-          );
-        },
-      ),
+      home: const AuthGate(),
     );
   }
 }
