@@ -236,6 +236,8 @@ class AuthService {
       case 'weak-password': return 'Password must be at least 6 characters.';
       case 'user-not-found': return 'No account found with this email.';
       case 'wrong-password': return 'Incorrect password. Please try again.';
+      // Newer Firebase reports a wrong password or unknown email as this.
+      case 'invalid-credential': return 'Incorrect email or password. Please try again.';
       case 'too-many-requests': return 'Too many attempts. Please try again later.';
       default: return e.message ?? 'Authentication failed.';
     }
