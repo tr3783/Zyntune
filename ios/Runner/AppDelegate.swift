@@ -1,5 +1,6 @@
 import Flutter
 import UIKit
+import StoreKit
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
@@ -84,6 +85,51 @@ import UIKit
                 default:
                     result(FlutterMethodNotImplemented)
                 }
+            }
+        }
+
+        // --- StoreKit Channel ---
+        // Asks Apple which build the user first downloaded (for grandfathering)
+        // and which purchases are currently active (so lapsed subscriptions end).
+        let storeRegistrar = engineBridge.pluginRegistry.registrar(forPlugin: "StorePlugin")!
+        let storeChannel = FlutterMethodChannel(
+            name: "com.topher.zyntune/store",
+            binaryMessenger: storeRegistrar.messenger()
+        )
+
+        storeChannel.setMethodCallHandler { call, result in
+            switch call.method {
+            case "originalAppVersion":
+                guard #available(iOS 16.0, *) else {
+                    result(nil)
+                    return
+                }
+                Task { @MainActor in
+                    do {
+                        guard case .verified(let transaction) = try await AppTransaction.shared else {
+                            result(nil)
+                            return
+                        }
+                        result([
+                            "originalAppVersion": transaction.originalAppVersion,
+                            "environment": transaction.environment.rawValue,
+                        ])
+                    } catch {
+                        result(FlutterError(code: "APP_TRANSACTION_FAILED", message: error.localizedDescription, details: nil))
+                    }
+                }
+            case "activeProductIds":
+                Task { @MainActor in
+                    var ids: [String] = []
+                    for await verification in Transaction.currentEntitlements {
+                        if case .verified(let transaction) = verification, transaction.revocationDate == nil {
+                            ids.append(transaction.productID)
+                        }
+                    }
+                    result(ids)
+                }
+            default:
+                result(FlutterMethodNotImplemented)
             }
         }
     }

@@ -1,7 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:in_app_purchase/in_app_purchase.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class PurchaseService extends ChangeNotifier {
   static final PurchaseService _instance = PurchaseService._internal();
@@ -13,6 +16,15 @@ class PurchaseService extends ChangeNotifier {
   static const String lifetimeId = 'com.topher.zyntune.pro.lifetime';
   static const Set<String> _productIds = {monthlyId, annualId, lifetimeId};
 
+  // First build of version 2.5.0. Anyone whose original App Store download
+  // was an earlier build keeps Pro free forever; later downloads must buy Pro.
+  static const int firstPaidBuild = 29;
+
+  static const _storeChannel = MethodChannel('com.topher.zyntune/store');
+
+  // These checks run during app launch, so don't let a slow network stall it.
+  static const _networkTimeout = Duration(seconds: 5);
+
   final InAppPurchase _iap = InAppPurchase.instance;
   StreamSubscription<List<PurchaseDetails>>? _subscription;
 
@@ -20,6 +32,7 @@ class PurchaseService extends ChangeNotifier {
   bool isAvailable = false;
   bool isPro = false;
   bool isGrandfathered = false;
+  bool _hasPaidPro = false;
   bool purchasePending = false;
   String? errorMessage;
 
@@ -27,8 +40,10 @@ class PurchaseService extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
 
     isGrandfathered = prefs.getBool('isGrandfathered') ?? false;
-    final storedPro = prefs.getBool('isProUser') ?? false;
-    isPro = isGrandfathered || storedPro;
+    _hasPaidPro = prefs.getBool('isProUser') ?? false;
+    _updateIsPro();
+
+    await _checkGrandfathered(prefs);
 
     isAvailable = await _iap.isAvailable();
     if (!isAvailable) {
@@ -46,7 +61,101 @@ class PurchaseService extends ChangeNotifier {
 
     await _loadProducts();
     await _restorePurchases();
+    await _refreshEntitlements();
     notifyListeners();
+  }
+
+  void _updateIsPro() {
+    isPro = isGrandfathered || _hasPaidPro;
+    notifyListeners();
+  }
+
+  // --- Grandfathering: everyone who downloaded before 2.5.0 keeps Pro ---
+
+  Future<void> _checkGrandfathered(SharedPreferences prefs) async {
+    if (!isGrandfathered) {
+      // One-time check the first time 2.5.0 runs: anyone with practice history
+      // or Pro on this phone was already using Zyntune. A fresh install has
+      // neither, so it isn't grandfathered. This covers iOS 15, where Apple's
+      // original-download check isn't available.
+      if (!(prefs.getBool('grandfatherMigrationDone') ?? false)) {
+        final sessions = prefs.getStringList('practiceSessions') ?? [];
+        if (sessions.isNotEmpty || (prefs.getBool('isProUser') ?? false)) {
+          isGrandfathered = true;
+        }
+        await prefs.setBool('grandfatherMigrationDone', true);
+      }
+    }
+    if (!isGrandfathered) isGrandfathered = await _downloadedBeforeCutoff();
+    if (!isGrandfathered) isGrandfathered = await _accountIsGrandfathered();
+
+    if (isGrandfathered) {
+      await prefs.setBool('isGrandfathered', true);
+      await _saveGrandfatheredToAccount();
+    }
+    _updateIsPro();
+  }
+
+  // Call after signing in or up, so grandfathering follows the account
+  // to and from other devices.
+  Future<void> refreshGrandfathering() async {
+    final prefs = await SharedPreferences.getInstance();
+    await _checkGrandfathered(prefs);
+  }
+
+  Future<bool> _downloadedBeforeCutoff() async {
+    try {
+      final info = await _storeChannel
+          .invokeMapMethod<String, dynamic>('originalAppVersion')
+          .timeout(_networkTimeout);
+      if (info == null) return false;
+      // TestFlight and Xcode installs always report version "1.0",
+      // so only trust App Store downloads.
+      if (info['environment'] != 'Production') return false;
+      final build = int.tryParse('${info['originalAppVersion']}');
+      // App Store builds are always numbered; if one somehow isn't,
+      // err on the side of keeping the promise.
+      return build == null || build < firstPaidBuild;
+    } catch (e) {
+      debugPrint('Original download check failed: $e');
+      return false;
+    }
+  }
+
+  Future<bool> _accountIsGrandfathered() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    try {
+      final doc = await FirebaseFirestore.instance.collection('users').doc(uid).get().timeout(_networkTimeout);
+      return doc.data()?['isGrandfathered'] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _saveGrandfatheredToAccount() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return;
+    try {
+      await FirebaseFirestore.instance.collection('users').doc(uid).update({'isGrandfathered': true});
+    } catch (_) {}
+  }
+
+  // --- Paid Pro: ask Apple what's currently active, so lapsed subscriptions end ---
+
+  Future<void> _refreshEntitlements() async {
+    try {
+      final ids = await _storeChannel.invokeListMethod<String>('activeProductIds').timeout(_networkTimeout);
+      if (ids == null) return;
+      final prefs = await SharedPreferences.getInstance();
+      _hasPaidPro = ids.any(_productIds.contains);
+      await prefs.setBool('isProUser', _hasPaidPro);
+      await prefs.setBool('isLifetimePro', ids.contains(lifetimeId));
+      _updateIsPro();
+    } catch (e) {
+      // Keep the saved value if Apple can't be reached (e.g. offline).
+      debugPrint('Entitlement check failed: $e');
+    }
   }
 
   Future<void> _loadProducts() async {
@@ -76,9 +185,13 @@ class PurchaseService extends ChangeNotifier {
       if (purchase.status == PurchaseStatus.pending) {
         purchasePending = true;
         notifyListeners();
-      } else if (purchase.status == PurchaseStatus.purchased ||
-          purchase.status == PurchaseStatus.restored) {
+      } else if (purchase.status == PurchaseStatus.purchased) {
         await _verifyAndGrant(purchase);
+      } else if (purchase.status == PurchaseStatus.restored) {
+        // Restores include expired subscriptions, so check what's still active.
+        await _refreshEntitlements();
+        purchasePending = false;
+        notifyListeners();
       } else if (purchase.status == PurchaseStatus.error) {
         purchasePending = false;
         errorMessage = purchase.error?.message ?? 'Purchase failed';
@@ -103,10 +216,10 @@ class PurchaseService extends ChangeNotifier {
       if (purchase.productID == lifetimeId) {
         await prefs.setBool('isLifetimePro', true);
       }
-      isPro = true;
+      _hasPaidPro = true;
       purchasePending = false;
       errorMessage = null;
-      notifyListeners();
+      _updateIsPro();
     }
   }
 
@@ -149,11 +262,14 @@ class PurchaseService extends ChangeNotifier {
     notifyListeners();
     try {
       await _iap.restorePurchases();
+      // If there's nothing to restore, no purchase event arrives,
+      // so check directly and clear the spinner.
+      await _refreshEntitlements();
     } catch (e) {
       errorMessage = e.toString();
-      purchasePending = false;
-      notifyListeners();
     }
+    purchasePending = false;
+    notifyListeners();
   }
 
   ProductDetails? get monthlyProduct {
@@ -166,24 +282,6 @@ class PurchaseService extends ChangeNotifier {
 
   ProductDetails? get lifetimeProduct {
     try { return products.firstWhere((p) => p.id == lifetimeId); } catch (_) { return null; }
-  }
-
-  static Future<void> grandfatherExistingUsers() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (prefs.getBool('isGrandfathered') ?? false) return;
-    if (prefs.getBool('isProUser') ?? false) return;
-    final sessions = prefs.getStringList('practiceSessions') ?? [];
-    if (sessions.isNotEmpty) {
-      await prefs.setBool('isGrandfathered', true);
-      await prefs.setBool('isProUser', true);
-      PurchaseService()._grantPro();
-    }
-  }
-
-  void _grantPro() {
-    isPro = true;
-    isGrandfathered = true;
-    notifyListeners();
   }
 
   @override

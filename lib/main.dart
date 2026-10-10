@@ -45,8 +45,6 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
-  await PurchaseService.grandfatherExistingUsers();
-
   MetronomeService();
   TimerService().onCountdownFinished = _showGlobalCountdownDialog;
   await NotificationHelper.initialize();

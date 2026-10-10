@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'push_notification_service.dart';
 import 'firestore_service.dart';
+import 'purchase_service.dart';
 
 class AuthService {
   static final AuthService _instance = AuthService._internal();
@@ -43,6 +44,7 @@ class AuthService {
       await _syncLocalDataToFirestore(credential.user!.uid);
       await FirestoreService().syncFirestoreSessionsToLocal();
       await PushNotificationService().loginUser(credential.user!.uid);
+      await PurchaseService().refreshGrandfathering();
       return credential;
     } on FirebaseAuthException catch (e) {
       throw _authError(e);
@@ -62,6 +64,7 @@ class AuthService {
       await _syncLocalDataToFirestore(credential.user!.uid);
       await FirestoreService().syncFirestoreSessionsToLocal();
       await PushNotificationService().loginUser(credential.user!.uid);
+      await PurchaseService().refreshGrandfathering();
       return credential;
     } on FirebaseAuthException catch (e) {
       throw _authError(e);

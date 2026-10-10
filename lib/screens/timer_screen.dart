@@ -270,7 +270,6 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     setState(() => _sessions.insert(0, newSession));
     await _saveSessions();
     await FirestoreService().saveSession(newSession.toJson());
-    await PurchaseService.grandfatherExistingUsers();
     await StreakHelper.updateStreak();
     await _loadStreak();
     await ReviewHelper.maybeRequestReviewAfterSession();
