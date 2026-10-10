@@ -1,0 +1,4 @@
+// Settings for the ZyntuneWidget extension.
+// Pulls in Flutter's generated values (only variables, no plugins) so the
+// widget's version and build number always match the app's pubspec version.
+#include? "Generated.xcconfig"
