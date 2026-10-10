@@ -544,7 +544,7 @@ Keep practicing! 🎸''';
       ]);
     } else {
       return GestureDetector(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())).then((_) { if (mounted) setState(() {}); }),
         child: Container(
           width: double.infinity,
           margin: const EdgeInsets.only(bottom: 24),
@@ -756,7 +756,7 @@ Keep practicing! 🎸''';
     const Text('Swipe left to delete a session', style: TextStyle(fontSize: 11, color: Colors.white30)),
     if (!PurchaseService().isPro && _sessions.length > 30)
       GestureDetector(
-        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+        onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())).then((_) { if (mounted) setState(() {}); }),
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
           decoration: BoxDecoration(color: _purple.withOpacity(0.15), borderRadius: BorderRadius.circular(10), border: Border.all(color: _purple.withOpacity(0.3))),

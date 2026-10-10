@@ -269,7 +269,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ])),
                   if (!isPro)
                     GestureDetector(
-                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())),
+                      onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())).then((_) { if (mounted) setState(() {}); }),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                         decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),

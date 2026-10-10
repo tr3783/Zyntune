@@ -334,7 +334,7 @@ class _HomeScreenState extends State<HomeScreen> {
         content: Text('$featureName is a Zyntune Pro feature. $description\n\nUpgrade to unlock it and more with a 7-day free trial.', textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 14, height: 1.5)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not Now', style: TextStyle(color: Colors.white38))),
-          ElevatedButton(onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B21FF), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('Start Free Trial')),
+          ElevatedButton(onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())).then((_) { if (mounted) setState(() {}); }); }, style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B21FF), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))), child: const Text('Start Free Trial')),
         ],
       ),
     );

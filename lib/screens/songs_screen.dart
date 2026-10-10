@@ -314,7 +314,7 @@ class _SongsScreenState extends State<SongsScreen> {
           actions: [
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not Now', style: TextStyle(color: Colors.white38))),
             ElevatedButton(
-              onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())); },
+              onPressed: () { Navigator.pop(context); Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen())).then((_) { if (mounted) setState(() {}); }); },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B21FF), foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
               child: const Text('Upgrade to Pro'),
             ),
