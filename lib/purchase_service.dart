@@ -60,7 +60,8 @@ class PurchaseService extends ChangeNotifier {
     );
 
     await _loadProducts();
-    await _restorePurchases();
+    // Ask Apple what's active instead of restoring at launch: restoring
+    // can show an Apple Account sign-in prompt.
     await _refreshEntitlements();
     notifyListeners();
   }
@@ -86,7 +87,7 @@ class PurchaseService extends ChangeNotifier {
         await prefs.setBool('grandfatherMigrationDone', true);
       }
     }
-    if (!isGrandfathered) isGrandfathered = await _downloadedBeforeCutoff();
+    if (!isGrandfathered) isGrandfathered = await _downloadedBeforeCutoff(prefs);
     if (!isGrandfathered) isGrandfathered = await _accountIsGrandfathered();
 
     if (isGrandfathered) {
@@ -103,11 +104,15 @@ class PurchaseService extends ChangeNotifier {
     await _checkGrandfathered(prefs);
   }
 
-  Future<bool> _downloadedBeforeCutoff() async {
+  Future<bool> _downloadedBeforeCutoff(SharedPreferences prefs) async {
+    // The original download never changes, so ask Apple only once per install.
+    // (Fetching it can show an Apple Account prompt if it isn't on the device.)
+    if (prefs.getBool('originalDownloadChecked') ?? false) return false;
     try {
       final info = await _storeChannel
           .invokeMapMethod<String, dynamic>('originalAppVersion')
           .timeout(_networkTimeout);
+      await prefs.setBool('originalDownloadChecked', true);
       if (info == null) return false;
       // TestFlight and Xcode installs always report version "1.0",
       // so only trust App Store downloads.
@@ -170,14 +175,6 @@ class PurchaseService extends ChangeNotifier {
       const order = [annualId, monthlyId, lifetimeId];
       return order.indexOf(a.id).compareTo(order.indexOf(b.id));
     });
-  }
-
-  Future<void> _restorePurchases() async {
-    try {
-      await _iap.restorePurchases();
-    } catch (e) {
-      debugPrint('Restore error: $e');
-    }
   }
 
   void _onPurchaseUpdate(List<PurchaseDetails> purchases) async {
