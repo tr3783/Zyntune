@@ -129,4 +129,42 @@ void main() {
       expect(prefs.getStringList('practiceSessions')!.length, 2);
     });
   });
+
+  group('migrating data saved before 2.5.1', () {
+    test('signed in: the phone data becomes theirs, nothing is set aside', () async {
+      SharedPreferences.setMockInitialValues({
+        'practiceSessions': [session('a', '2026-10-01 10:00')],
+        'userName': 'Joe',
+      });
+      await service.migrateLegacyData('uid-joe');
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('dataOwnerUid'), 'uid-joe');
+      expect(prefs.getString('userName'), 'Joe');
+      expect(prefs.getString('parkedData_legacy'), isNull);
+    });
+
+    test('signed out: the phone data is set aside, not left for the next sign-in', () async {
+      SharedPreferences.setMockInitialValues({
+        'practiceSessions': [session('a', '2026-10-01 10:00')],
+        'userName': 'Joe',
+      });
+      await service.migrateLegacyData(null);
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('dataOwnerUid'), isNull);
+      expect(prefs.getString('userName'), isNull);
+      expect(prefs.getStringList('practiceSessions'), isNull);
+      expect(prefs.getString('parkedData_legacy'), isNotNull);
+    });
+
+    test('runs only once: an owned phone is left alone', () async {
+      SharedPreferences.setMockInitialValues({
+        'dataOwnerUid': 'uid-amy',
+        'userName': 'Amy',
+      });
+      await service.migrateLegacyData('uid-joe');
+      final prefs = await SharedPreferences.getInstance();
+      expect(prefs.getString('dataOwnerUid'), 'uid-amy');
+      expect(prefs.getString('userName'), 'Amy');
+    });
+  });
 }

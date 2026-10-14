@@ -96,10 +96,8 @@ class AccountDataService {
         // sign-out flow). Set it aside for that account.
         await _park(prefs, owner);
       } else if (_hasPersonalData(prefs)) {
-        // Data from before 2.5.1, when the phone didn't track an owner.
-        // Older versions merged it into whoever signed in, so an existing
-        // account claims it; a brand-new account must not.
-        if (isNewAccount) await _park(prefs, _legacyParkId);
+        // Unowned data (normally handled by migrateLegacyData at launch).
+        await _park(prefs, _legacyParkId);
       }
 
       await prefs.setString(_ownerKey, uid);
@@ -114,11 +112,69 @@ class AccountDataService {
       }
 
       await _restoreParked(prefs, uid);
-      await _restoreParked(prefs, _legacyParkId);
+      await _restoreLegacyIfOwned(prefs, uid);
       await sync();
     } catch (e) {
       debugPrint('AccountDataService prepare failed: $e');
     }
+  }
+
+  /// One-time migration of data saved before 2.5.1, when the phone didn't
+  /// record whose data it held. Call at launch, before showing the app.
+  /// - Signed in: it's that user's data (older versions merged it into their
+  ///   account at every sign-in anyway), so they own it.
+  /// - Signed out: set it aside. It's given back only to an account that
+  ///   already has some of it in the cloud (see _restoreLegacyIfOwned).
+  Future<void> migrateLegacyData(String? signedInUid) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getString(_ownerKey) != null || !_hasPersonalData(prefs)) return;
+      if (signedInUid != null) {
+        await prefs.setString(_ownerKey, signedInUid);
+        await prefs.remove(_syncedHashKey);
+        await prefs.remove(_syncedAtKey);
+      } else {
+        await _park(prefs, _legacyParkId);
+      }
+    } catch (e) {
+      debugPrint('AccountDataService migration failed: $e');
+    }
+  }
+
+  /// Older versions uploaded sessions, repertoire, goals and notes to the
+  /// signed-in account, so the real owner's account already contains some of
+  /// the set-aside data. Only that account gets it back.
+  Future<void> _restoreLegacyIfOwned(SharedPreferences prefs, String uid) async {
+    final raw = prefs.getString('$_parkedPrefix$_legacyParkId');
+    if (raw == null) return;
+    final parked = _decodeParked(raw);
+    final parkedKeys = <String>{
+      ...parked.$2.map(_itemKey),
+      for (final key in ['songs', 'longTermGoals', 'lessonNotes'])
+        ...List<String>.from((parked.$1[key] as List?) ?? []).map(_itemKey),
+    };
+    if (parkedKeys.isEmpty) return;
+
+    final userDoc = await _db.collection('users').doc(uid).get().timeout(_timeout);
+    final data = userDoc.data() ?? {};
+    final cloudKeys = <String>{
+      for (final field in ['repertoire', 'goals', 'lessonNotes'])
+        for (final item in (data[field] as List?) ?? [])
+          if (item is Map) (item['id'] ?? item['title'] ?? '').toString(),
+    };
+    if (!parkedKeys.any(cloudKeys.contains)) {
+      final sessions = await _db.collection('users').doc(uid).collection('sessions').get().timeout(_timeout);
+      cloudKeys.addAll(sessions.docs.map((d) => (d.data()['id'] ?? d.id).toString()));
+    }
+    if (parkedKeys.any(cloudKeys.contains)) await _restoreParked(prefs, _legacyParkId);
+  }
+
+  String _itemKey(String item) {
+    try {
+      final map = jsonDecode(item);
+      if (map is Map) return (map['id'] ?? map['title'] ?? item).toString();
+    } catch (_) {}
+    return item;
   }
 
   /// Two-way sync of the signed-in account's data. Returns true on success.
@@ -415,19 +471,12 @@ class AccountDataService {
   /// Union of two lists of JSON items, matched by 'id' (or 'title'), with the
   /// phone's version winning when both have the same item.
   List<String> _mergeList(List<String> mine, List<String> theirs) {
-    String keyOf(String item) {
-      try {
-        final map = jsonDecode(item);
-        if (map is Map) return (map['id'] ?? map['title'] ?? item).toString();
-      } catch (_) {}
-      return item;
-    }
     final merged = <String, String>{};
     for (final item in theirs) {
-      merged[keyOf(item)] = item;
+      merged[_itemKey(item)] = item;
     }
     for (final item in mine) {
-      merged[keyOf(item)] = item;
+      merged[_itemKey(item)] = item;
     }
     return merged.values.toList();
   }

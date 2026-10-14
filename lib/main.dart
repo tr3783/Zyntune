@@ -46,6 +46,9 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
 
+  // Data saved before 2.5.1 didn't record which account it belonged to.
+  await AccountDataService().migrateLegacyData(FirebaseAuth.instance.currentUser?.uid);
+
   MetronomeService();
   TimerService().onCountdownFinished = _showGlobalCountdownDialog;
   await NotificationHelper.initialize();
