@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -135,14 +136,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
     }
   }
 
-  static const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-  String _formatFullDate(String dateStr) {
-    try {
-      final dt = DateTime.parse(dateStr.substring(0, 10));
-      return '${_monthNames[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) { return dateStr; }
-  }
+  String _formatFullDate(String dateStr) => formatStoredDate(dateStr);
 
   String _daysRemaining(String dueDate) {
     try {
@@ -282,7 +276,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
                   child: Row(children: [
                     Icon(Icons.calendar_today, size: 18, color: _categoryColor(selectedCategory)),
                     const SizedBox(width: 8),
-                    Text(selectedDueDate.toString().substring(0, 10), style: const TextStyle(fontSize: 15, color: Colors.white)),
+                    Text(formatFullDate(selectedDueDate), style: const TextStyle(fontSize: 15, color: Colors.white)),
                     const Spacer(),
                     const Icon(Icons.edit, size: 16, color: Colors.white54),
                   ]),

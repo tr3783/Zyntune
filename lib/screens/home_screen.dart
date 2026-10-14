@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -107,11 +108,7 @@ class _HomeScreenState extends State<HomeScreen> {
     } catch (_) {}
   }
 
-  String _formatDate(DateTime date) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-    return '${days[date.weekday - 1]}, ${months[date.month - 1]} ${date.day}';
-  }
+  String _formatDate(DateTime date) => formatFullDateWithWeekday(date);
 
   Future<void> _maybeShowWhatsNew() async {
     final prefs = await SharedPreferences.getInstance();

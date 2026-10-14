@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -166,13 +167,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     if (mounted) setState(() => _currentStreak = data['currentStreak'] ?? 0);
   }
 
-  String _formatDisplayDate(String rawDate) {
-    const months = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
-    try {
-      final dt = DateTime.parse(rawDate.substring(0, 10));
-      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) { return rawDate; }
-  }
+  String _formatDisplayDate(String rawDate) => formatStoredDate(rawDate);
 
   Future<void> _loadInstruments() async {
     final prefs = await SharedPreferences.getInstance();
@@ -673,7 +668,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                   child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
                     const Text('Date', style: TextStyle(color: Colors.white70, fontSize: 13)),
                     Row(children: [
-                      Text('${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')}', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      Text(formatFullDate(selectedDate), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                       const SizedBox(width: 8),
                       const Icon(Icons.calendar_today, color: Colors.white54, size: 16),
                     ]),

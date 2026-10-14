@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:share_plus/share_plus.dart';
@@ -279,18 +280,9 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
     return breakdown;
   }
 
-  String _formatFullDate(DateTime dt) {
-    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-    return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-  }
+  String _formatFullDate(DateTime dt) => formatFullDate(dt);
 
-  String _formatDate(String raw) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    try {
-      final dt = DateTime.parse(raw.substring(0, 10));
-      return '${months[dt.month - 1]} ${dt.day}';
-    } catch (_) { return raw; }
-  }
+  String _formatDate(String raw) => formatStoredDate(raw);
 
   void _showReminderDialog(BuildContext context, String studentName) {
     final List<String> presets = [

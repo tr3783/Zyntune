@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../purchase_service.dart';
@@ -164,19 +165,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   String _eventTypeLabel(EventType type) => type.name[0].toUpperCase() + type.name.substring(1);
 
-  static const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-  String _formatFullDate(String dateKey) {
-    try {
-      final parts = dateKey.split('-');
-      final year = int.parse(parts[0]);
-      final month = int.parse(parts[1]);
-      final day = int.parse(parts[2]);
-      return '${_monthNames[month - 1]} $day, $year';
-    } catch (_) {
-      return dateKey;
-    }
-  }
+  String _formatFullDate(String dateKey) => formatStoredDate(dateKey);
 
   // Returns piece -> total minutes for a given day's sessions
   Map<String, int> _pieceBreakdown(List<Map<String, dynamic>> sessions) {
@@ -226,7 +215,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: _cardBg,
-          title: Text('Add Event — $date', style: const TextStyle(color: Colors.white, fontSize: 16)),
+          title: Text('Add Event — ${formatStoredDate(date)}', style: const TextStyle(color: Colors.white, fontSize: 16)),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -618,7 +607,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     const SizedBox(width: 12),
                     Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                       Text(event.title, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-                      Text('${event.date} • ${_eventTypeLabel(event.type)}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
+                      Text('${formatStoredDate(event.date)} • ${_eventTypeLabel(event.type)}', style: const TextStyle(fontSize: 12, color: Colors.white54)),
                     ])),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),

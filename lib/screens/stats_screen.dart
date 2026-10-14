@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -108,13 +109,7 @@ class _StatsScreenState extends State<StatsScreen> {
     return _pieceColors[index % _pieceColors.length];
   }
 
-  String _formatDisplayDate(String rawDate) {
-    const months = ['Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.', 'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'];
-    try {
-      final dt = DateTime.parse(rawDate.substring(0, 10));
-      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) { return rawDate; }
-  }
+  String _formatDisplayDate(String rawDate) => formatStoredDate(rawDate);
 
   String _formatMinutes(int minutes) {
     if (minutes >= 60) {

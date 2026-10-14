@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:path_provider/path_provider.dart';
@@ -69,18 +70,7 @@ class SessionCard extends StatelessWidget {
     required this.userName,
   });
 
-  String _formatDate(String raw) {
-    const months = [
-      'Jan.', 'Feb.', 'Mar.', 'Apr.', 'May', 'Jun.',
-      'Jul.', 'Aug.', 'Sep.', 'Oct.', 'Nov.', 'Dec.'
-    ];
-    try {
-      final dt = DateTime.parse(raw.substring(0, 10));
-      return '${months[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) {
-      return raw;
-    }
-  }
+  String _formatDate(String raw) => formatStoredDate(raw);
 
   String _motivationalMessage() {
     if (minutes >= 60) return 'Marathon session! 🏆';

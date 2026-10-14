@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../date_format.dart';
 import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
@@ -87,14 +88,7 @@ class _NotesScreenState extends State<NotesScreen> {
     super.dispose();
   }
 
-  static const _monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-  String _formatFullDate(String dateStr) {
-    try {
-      final dt = DateTime.parse(dateStr.substring(0, 10));
-      return '${_monthNames[dt.month - 1]} ${dt.day}, ${dt.year}';
-    } catch (_) { return dateStr; }
-  }
+  String _formatFullDate(String dateStr) => formatStoredDate(dateStr);
 
   List<Note> get _filteredNotes {
     if (_searchQuery.isEmpty) return _notes;
