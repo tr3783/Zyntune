@@ -12,7 +12,9 @@ enum _Kind { stringList, string, integer, boolean }
 ///
 /// Personal data is stored on the phone (SharedPreferences) and backed up to
 /// the signed-in account in Firestore: practice sessions in
-/// users/{uid}/sessions, everything else in the `appData` map on users/{uid}.
+/// users/{uid}/sessions, everything else in users/{uid}/private/appData, which
+/// only the owner can read. (users/{uid} itself is readable by a student's
+/// teacher, and teacher docs by any signed-in user.)
 /// The phone remembers whose data it holds (`dataOwnerUid`), so one account's
 /// data is never uploaded into another account.
 ///
@@ -132,11 +134,12 @@ class AccountDataService {
       final docRef = _db.collection('users').doc(uid);
       final doc = await docRef.get().timeout(_timeout);
       if (!doc.exists) return false;
-      final docData = doc.data() ?? {};
+      final privateDoc = await _privateRef(uid).get().timeout(_timeout);
+      final privateData = privateDoc.data();
 
       final local = _readLocal(prefs);
-      final cloud = _cloudAppData(docData);
-      final cloudUpdatedAt = docData['appDataUpdatedAt'] as int?;
+      final cloud = _cloudAppData(doc.data() ?? {}, privateData);
+      final cloudUpdatedAt = privateData?['appDataUpdatedAt'] as int?;
       final lastSyncedAt = prefs.getInt(_syncedAtKey);
 
       // Changed since this phone last synced? (Data saved by older versions
@@ -154,7 +157,7 @@ class AccountDataService {
       final sessions = await _syncSessions(prefs, uid);
 
       if (localChanged) {
-        await _push(prefs, docRef, result, sessions);
+        await _push(prefs, uid, result, sessions);
       } else {
         await prefs.setString(_syncedHashKey, _hash(result));
         if (cloudUpdatedAt != null) await prefs.setInt(_syncedAtKey, cloudUpdatedAt);
@@ -282,10 +285,13 @@ class AccountDataService {
 
   // --- Cloud data ---
 
+  DocumentReference<Map<String, dynamic>> _privateRef(String uid) =>
+      _db.collection('users').doc(uid).collection('private').doc('appData');
+
   /// The account's app data, or for accounts that haven't synced from 2.5.1+
-  /// yet, what older versions backed up in top-level fields.
-  Map<String, dynamic> _cloudAppData(Map<String, dynamic> doc) {
-    final appData = doc['appData'];
+  /// yet, what older versions backed up in top-level fields of users/{uid}.
+  Map<String, dynamic> _cloudAppData(Map<String, dynamic> doc, Map<String, dynamic>? privateDoc) {
+    final appData = privateDoc?['appData'];
     if (appData is Map) return Map<String, dynamic>.from(appData);
 
     final legacy = <String, dynamic>{};
@@ -312,7 +318,7 @@ class AccountDataService {
 
   Future<void> _push(
     SharedPreferences prefs,
-    DocumentReference<Map<String, dynamic>> docRef,
+    String uid,
     Map<String, dynamic> data,
     List<String> sessions,
   ) async {
@@ -327,9 +333,9 @@ class AccountDataService {
       try { return total + ((jsonDecode(s) as Map)['durationMinutes'] as num? ?? 0).toInt(); } catch (_) { return total; }
     });
 
-    await docRef.update({
-      'appData': data,
-      'appDataUpdatedAt': updatedAt,
+    final batch = _db.batch();
+    batch.set(_privateRef(uid), {'appData': data, 'appDataUpdatedAt': updatedAt});
+    batch.update(_db.collection('users').doc(uid), {
       // Fields the teacher's studio view reads.
       'repertoire': decodeList('songs'),
       'goals': decodeList('longTermGoals'),
@@ -339,7 +345,8 @@ class AccountDataService {
       'totalSessions': sessions.length,
       'totalMinutes': totalMinutes,
       'lastSyncedAt': FieldValue.serverTimestamp(),
-    }).timeout(_timeout);
+    });
+    await batch.commit().timeout(_timeout);
     await prefs.setString(_syncedHashKey, _hash(data));
     await prefs.setInt(_syncedAtKey, updatedAt);
   }
@@ -445,7 +452,8 @@ class AccountDataService {
   @visibleForTesting
   List<String> mergeSessionsForTest(List<String> mine, List<String> theirs) => _mergeSessions(mine, theirs);
   @visibleForTesting
-  Map<String, dynamic> cloudAppDataForTest(Map<String, dynamic> doc) => _cloudAppData(doc);
+  Map<String, dynamic> cloudAppDataForTest(Map<String, dynamic> doc, [Map<String, dynamic>? privateDoc]) =>
+      _cloudAppData(doc, privateDoc);
   @visibleForTesting
   Map<String, dynamic> readLocalForTest(SharedPreferences prefs) => _readLocal(prefs);
   @visibleForTesting

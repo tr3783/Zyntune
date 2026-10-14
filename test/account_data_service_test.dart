@@ -73,10 +73,10 @@ void main() {
     });
 
     test('uses the account data saved by 2.5.1+ when present', () {
-      final data = service.cloudAppDataForTest({
-        'name': 'Old name',
-        'appData': {'userName': 'New name'},
-      });
+      final data = service.cloudAppDataForTest(
+        {'name': 'Old name'},
+        {'appData': {'userName': 'New name'}},
+      );
       expect(data, {'userName': 'New name'});
     });
   });

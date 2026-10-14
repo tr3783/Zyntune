@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // API keys (OneSignal, Resend). Only Cloud Functions read these, and they
+    // bypass these rules. [2.5.1: was readable by any signed-in user]
+    match /config/{document} {
+      allow read, write: if false;
+    }
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+      allow read: if request.auth != null && resource.data.role == 'teacher';
+      allow read: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+        resource.data.teacherId == request.auth.uid;
+      allow update: if request.auth != null &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+        resource.data.teacherId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lessonNotes', 'goals']);
+      // The account's own backed-up app data (calendar, notes, settings...).
+      // Owner only. [2.5.1: new]
+      match /private/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /sessions/{sessionId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+          get(/databases/$(database)/documents/users/$(userId)).data.teacherId == request.auth.uid;
+      }
+      match /assignments/{assignmentId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+        allow read, write: if request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+          get(/databases/$(database)/documents/users/$(userId)).data.teacherId == request.auth.uid;
+      }
+      match /reminders/{reminderId} {
+        allow read: if request.auth != null && request.auth.uid == userId;
+        allow read: if request.auth != null &&
+          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'teacher' &&
+          get(/databases/$(database)/documents/users/$(userId)).data.teacherId == request.auth.uid;
+        allow create, update: if false;
+        // The owner can delete them when deleting their account. [2.5.1: new]
+        allow delete: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    match /{path=**}/assignments/{assignmentId} {
+      allow read: if request.auth != null && (
+        resource.data.teacherUid == request.auth.uid ||
+        request.auth.uid == assignmentId
+      );
+    }
+  }
+}

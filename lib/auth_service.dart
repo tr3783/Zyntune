@@ -139,6 +139,10 @@ class AuthService {
       final userDoc = _db.collection('users').doc(user.uid);
       // Deleting a document doesn't delete its subcollections,
       // so remove practice history and assignments explicitly.
+      // Delete the parts that need the 2.5.1 Firestore rules first, so if
+      // they're refused nothing else has been deleted yet.
+      await _deleteCollection(userDoc.collection('private'));
+      await _deleteCollection(userDoc.collection('reminders'));
       await _deleteCollection(userDoc.collection('sessions'));
       await _deleteCollection(userDoc.collection('assignments'));
       await userDoc.delete();
