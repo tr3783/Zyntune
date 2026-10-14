@@ -36,6 +36,44 @@ async function getResendApiKey(): Promise<string | null> {
   }
 }
 
+// Escape user-provided text before putting it in email HTML.
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+// Send a push notification to one user (by Firebase uid, which the app sets
+// as the OneSignal external_id). The REST API key never leaves the server.
+async function sendPush(targetUid: string, title: string, body: string, data: Record<string, string>): Promise<void> {
+  const restApiKey = await getOneSignalKey();
+  if (!restApiKey) {
+    console.error("No OneSignal REST API key found");
+    return;
+  }
+  const response = await fetch("https://onesignal.com/api/v1/notifications", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Basic ${restApiKey}`,
+    },
+    body: JSON.stringify({
+      app_id: ONESIGNAL_APP_ID,
+      target_channel: "push",
+      include_aliases: { external_id: [targetUid] },
+      headings: { en: title },
+      contents: { en: body },
+      data,
+    }),
+  });
+  if (!response.ok) {
+    console.error("OneSignal error:", await response.text());
+  }
+}
+
 async function sendParentEmail({
   parentEmail,
   studentName,
@@ -73,13 +111,13 @@ async function sendParentEmail({
           </div>
           <div style="padding: 24px;">
             <p style="color: rgba(255,255,255,0.6); font-size: 14px; margin: 0 0 16px;">
-              This is an automated notification for the parent or guardian of <strong style="color: #ffffff;">${studentName}</strong>.
+              This is an automated notification for the parent or guardian of <strong style="color: #ffffff;">${escapeHtml(studentName)}</strong>.
             </p>
             <div style="background: rgba(107,33,255,0.15); border: 1px solid rgba(107,33,255,0.3); border-radius: 12px; padding: 16px; margin-bottom: 16px;">
               <p style="margin: 0; font-size: 15px; line-height: 1.6; color: #ffffff;">${body}</p>
             </div>
             <p style="color: rgba(255,255,255,0.4); font-size: 12px; margin: 0;">
-              Sent by ${teacherName} via Zyntune Studio · <a href="mailto:zyntuneapp@gmail.com" style="color: #00BFA5;">Report a concern</a>
+              Sent by ${escapeHtml(teacherName)} via Zyntune Studio · <a href="mailto:zyntuneapp@gmail.com" style="color: #00BFA5;">Report a concern</a>
             </p>
           </div>
         </div>
@@ -140,24 +178,7 @@ export const sendReminder = onCall(async (request) => {
   });
 
   // Send push notification
-  const restApiKey = await getOneSignalKey();
-  if (restApiKey) {
-    await fetch("https://onesignal.com/api/v1/notifications", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Basic ${restApiKey}`,
-      },
-      body: JSON.stringify({
-        app_id: ONESIGNAL_APP_ID,
-        target_channel: "push",
-        include_aliases: { external_id: [studentUid] },
-        headings: { en: `👋 Reminder from ${teacherName}` },
-        contents: { en: message },
-        data: { type: "reminder" },
-      }),
-    });
-  }
+  await sendPush(studentUid, `👋 Reminder from ${teacherName}`, message, { type: "reminder" });
 
   // CC parent if email is set
   if (parentEmail) {
@@ -167,7 +188,7 @@ export const sendReminder = onCall(async (request) => {
         studentName,
         teacherName,
         subject: `Practice reminder for ${studentName} from ${teacherName}`,
-        body: `${teacherName} sent a practice reminder to ${studentName}:<br><br><strong>${message}</strong>`,
+        body: `${escapeHtml(teacherName)} sent a practice reminder to ${escapeHtml(studentName)}:<br><br><strong>${escapeHtml(message)}</strong>`,
       });
     } catch (e) {
       console.error("Parent email failed:", e);
@@ -207,6 +228,8 @@ export const notifyNewAssignment = onCall(async (request) => {
   const studentName = studentData.name as string | undefined ?? "Your child";
   const parentEmail = studentData.parentEmail as string | undefined ?? "";
 
+  await sendPush(studentUid, `📋 New Assignment from ${teacherName}`, assignmentTitle, { type: "new_assignment" });
+
   // CC parent if email is set
   if (parentEmail) {
     try {
@@ -215,12 +238,78 @@ export const notifyNewAssignment = onCall(async (request) => {
         studentName,
         teacherName,
         subject: `New assignment for ${studentName} from ${teacherName}`,
-        body: `${teacherName} assigned new homework to ${studentName}:<br><br><strong>${assignmentTitle}</strong><br><br>Open the Zyntune app to view the full assignment.`,
+        body: `${escapeHtml(teacherName)} assigned new homework to ${escapeHtml(studentName)}:<br><br><strong>${escapeHtml(assignmentTitle)}</strong><br><br>Open the Zyntune app to view the full assignment.`,
       });
     } catch (e) {
       console.error("Parent email failed:", e);
     }
   }
 
+  return { success: true };
+});
+
+// Student marked an assignment complete: notify their teacher.
+export const notifyAssignmentCompleted = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+
+  const studentUid = request.auth.uid;
+  const { assignmentId } = request.data as { assignmentId: string };
+  if (!assignmentId) {
+    throw new HttpsError("invalid-argument", "assignmentId is required.");
+  }
+
+  const assignmentDoc = await db.collection("users").doc(studentUid).collection("assignments").doc(assignmentId).get();
+  if (!assignmentDoc.exists) {
+    throw new HttpsError("not-found", "Assignment not found.");
+  }
+  const assignment = assignmentDoc.data()!;
+  if (assignment.completed !== true) {
+    throw new HttpsError("failed-precondition", "Assignment is not completed.");
+  }
+  const teacherUid = assignment.teacherUid as string | undefined;
+  if (!teacherUid) {
+    return { success: true };
+  }
+
+  const studentDoc = await db.collection("users").doc(studentUid).get();
+  const studentName = studentDoc.data()?.name as string | undefined ?? "Your student";
+  const assignmentTitle = assignment.title as string | undefined ?? "an assignment";
+
+  await sendPush(teacherUid, `✅ ${studentName} completed an assignment`, assignmentTitle, { type: "assignment_completed" });
+  return { success: true };
+});
+
+// Teacher left feedback on an assignment: notify the student.
+export const notifyFeedbackReceived = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+
+  const teacherUid = request.auth.uid;
+  const { studentUid, assignmentId } = request.data as { studentUid: string; assignmentId: string };
+  if (!studentUid || !assignmentId) {
+    throw new HttpsError("invalid-argument", "studentUid and assignmentId are required.");
+  }
+
+  const studentDoc = await db.collection("users").doc(studentUid).get();
+  if (!studentDoc.exists) {
+    throw new HttpsError("not-found", "Student not found.");
+  }
+  if (studentDoc.data()!.teacherId !== teacherUid) {
+    throw new HttpsError("permission-denied", "You are not this student's teacher.");
+  }
+
+  const assignmentDoc = await db.collection("users").doc(studentUid).collection("assignments").doc(assignmentId).get();
+  if (!assignmentDoc.exists) {
+    throw new HttpsError("not-found", "Assignment not found.");
+  }
+
+  const teacherDoc = await db.collection("users").doc(teacherUid).get();
+  const teacherName = teacherDoc.data()?.name as string | undefined ?? "Your teacher";
+  const assignmentTitle = assignmentDoc.data()!.title as string | undefined ?? "your assignment";
+
+  await sendPush(studentUid, `💬 Feedback from ${teacherName}`, `New feedback on: ${assignmentTitle}`, { type: "feedback" });
   return { success: true };
 });
