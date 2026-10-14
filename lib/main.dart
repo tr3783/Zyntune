@@ -12,6 +12,7 @@ import 'widget_service.dart';
 import 'firebase_options.dart';
 import 'push_notification_service.dart';
 import 'auth_gate.dart';
+import 'screens/timer_screen.dart';
 import 'account_data_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -24,15 +25,22 @@ void _showGlobalCountdownDialog() {
     barrierDismissible: false,
     builder: (context) => AlertDialog(
       title: const Text('Time\'s Up! ⏰'),
-      content: const Text('Your practice session is complete! Great work!'),
+      content: const Text('Your practice session is complete! Great work! Save it to your practice history?'),
       actions: [
+        // "Later" keeps the finished countdown, so the timer screen offers
+        // to save it when opened.
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Later'),
+        ),
         ElevatedButton(
           onPressed: () {
             Navigator.pop(context);
-            TimerService().resetCountdown();
+            // The timer screen shows its save dialog for a finished countdown.
+            navigatorKey.currentState?.push(MaterialPageRoute(builder: (_) => const TimerScreen()));
           },
           style: ElevatedButton.styleFrom(backgroundColor: Colors.teal, foregroundColor: Colors.white),
-          child: const Text('Done!'),
+          child: const Text('Save Session'),
         ),
       ],
     ),

@@ -75,6 +75,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   Map<String, String> _pieceComposers = {};
   Set<String> _assignedPieces = {};
   bool _countdownSaveDialogShown = false;
+  // The app-wide countdown handler to restore when this screen closes.
+  VoidCallback? _previousCountdownHandler;
   int _currentStreak = 0;
 
   static const _purple = Color(0xFF6B21FF);
@@ -100,12 +102,24 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       }
     });
 
-    _timerService.onCountdownFinished = () {
-      if (mounted && !_countdownSaveDialogShown) {
+    _previousCountdownHandler = _timerService.onCountdownFinished;
+    _timerService.onCountdownFinished = _onCountdownFinished;
+
+    // A countdown may have finished while this screen was closed
+    // (e.g. while on the metronome): offer to save it now.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _timerService.countdownFinished && !_countdownSaveDialogShown) {
         _countdownSaveDialogShown = true;
         _showCountdownSaveDialog(_timerService.countdownTotal);
       }
-    };
+    });
+  }
+
+  void _onCountdownFinished() {
+    if (mounted && !_countdownSaveDialogShown) {
+      _countdownSaveDialogShown = true;
+      _showCountdownSaveDialog(_timerService.countdownTotal);
+    }
   }
 
   void _onTimerUpdate() {
@@ -134,6 +148,11 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    // Hand the countdown back to the app-wide handler, so a countdown that
+    // finishes after leaving this screen still offers to save the session.
+    if (_timerService.onCountdownFinished == _onCountdownFinished) {
+      _timerService.onCountdownFinished = _previousCountdownHandler;
+    }
     _uiTicker?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _timerService.removeListener(_onTimerUpdate);
