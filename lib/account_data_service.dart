@@ -42,6 +42,7 @@ class AccountDataService {
     'streakFreezeUsedDate': _Kind.string,
     'lastReportCardShown': _Kind.string,
     'parentEmail': _Kind.string,
+    'dismissedReminderId': _Kind.string,
     'activeInstrument': _Kind.string,
     'instrument': _Kind.string,
     'userName': _Kind.string,

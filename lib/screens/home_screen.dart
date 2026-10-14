@@ -21,6 +21,7 @@ import 'calendar_screen.dart';
 import 'paywall_screen.dart';
 import 'studio_screen.dart';
 import 'assignments_widget.dart';
+import 'teacher_reminder_card.dart';
 import 'link_teacher_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -624,7 +625,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             const SizedBox(height: 20),
 
-                        // --- Teacher Assignments (all users) ---
+            // --- Latest teacher reminder (students) ---
+            const TeacherReminderCard(),
+
+            // --- Teacher Assignments (all users) ---
             const AssignmentsWidget(),
 
             // --- Today's Objectives ---
