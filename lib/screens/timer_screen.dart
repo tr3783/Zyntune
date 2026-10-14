@@ -821,6 +821,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final instrumentRef = [_activeInstrument];
     final pieceRef = ['', ''];
     DateTime selectedDate = DateTime.now();
+    String? minutesError;
 
     await showDialog(
       context: context,
@@ -860,8 +861,12 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                 controller: minutesController,
                 keyboardType: TextInputType.number,
                 style: const TextStyle(color: Colors.white),
+                onChanged: (_) {
+                  if (minutesError != null) setDialogState(() => minutesError = null);
+                },
                 decoration: InputDecoration(
                   labelText: 'Duration (minutes) *',
+                  errorText: minutesError,
                   labelStyle: const TextStyle(color: Colors.white60),
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
                   enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: _purple.withOpacity(0.4))),
@@ -894,7 +899,10 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
             ElevatedButton(
               onPressed: () async {
                 final mins = int.tryParse(minutesController.text.trim());
-                if (mins == null || mins <= 0) return;
+                if (mins == null || mins <= 0) {
+                  setDialogState(() => minutesError = 'Enter how many minutes you practiced');
+                  return;
+                }
                 await _saveNewSession(instrumentRef[0], mins * 60,
                     notes: notesController.text.trim(), piece: pieceRef[0], movement: pieceRef[1], date: selectedDate);
                 if (mounted) Navigator.pop(context);
