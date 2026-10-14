@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../notification_helper.dart';
@@ -142,6 +143,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
 
     ICloudSyncService.sync();
+    AccountDataService().sync();
     if (mounted) Navigator.pop(context);
   }
 

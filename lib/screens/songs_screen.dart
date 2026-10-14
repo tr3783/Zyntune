@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
+import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
-import '../icloud_sync_service.dart';
 import 'paywall_screen.dart';
 import '../purchase_service.dart';
 
@@ -121,7 +121,7 @@ class _SongsScreenState extends State<SongsScreen> {
   Future<void> _savePieces() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('songs', _pieces.map((s) => jsonEncode(s.toJson())).toList());
-    ICloudSyncService.sync();
+    AccountDataService().sync();
   }
 
   Color _statusColor(PieceStatus status) {

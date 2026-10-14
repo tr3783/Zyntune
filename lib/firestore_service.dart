@@ -2,7 +2,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'auth_service.dart';
-import 'push_notification_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 
 class FirestoreService {
@@ -56,84 +55,7 @@ class FirestoreService {
         .map((snap) => snap.docs.map((d) => d.data()).toList());
   }
 
-  Future<void> syncLocalSessionsToFirestore() async {
-    final uid = _uid;
-    if (uid == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final data = prefs.getStringList('practiceSessions') ?? [];
-      final batch = _db.batch();
-      for (final s in data) {
-        try {
-          final session = jsonDecode(s) as Map<String, dynamic>;
-          final sessionId = session['id'] as String;
-          final ref = _db.collection('users').doc(uid).collection('sessions').doc(sessionId);
-          batch.set(ref, {...session, 'savedAt': FieldValue.serverTimestamp()}, SetOptions(merge: true));
-        } catch (_) {}
-      }
-      await batch.commit();
-      await _updateUserStats(uid);
-    } catch (_) {}
-  }
   
-  Future<void> syncFirestoreSessionsToLocal() async {
-    final uid = _uid;
-    if (uid == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final localData = prefs.getStringList('practiceSessions') ?? [];
-
-      final snapshot = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('sessions')
-          .orderBy('date', descending: true)
-          .get();
-
-      if (snapshot.docs.isEmpty) return;
-
-      final localIds = <String>{};
-      for (final s in localData) {
-        try {
-          final map = jsonDecode(s) as Map<String, dynamic>;
-          localIds.add(map['id'] as String? ?? '');
-        } catch (_) {}
-      }
-
-      final merged = List<String>.from(localData);
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final id = data['id'] as String? ?? doc.id;
-        if (!localIds.contains(id)) {
-          merged.add(jsonEncode({
-            'id': id,
-            'date': data['date'] ?? '',
-            'durationMinutes': data['durationMinutes'] ?? 0,
-            'notes': data['notes'] ?? '',
-            'instrument': data['instrument'] ?? '',
-            'piece': data['piece'] ?? '',
-          }));
-        }
-      }
-
-      merged.sort((a, b) {
-        try {
-          final aDate = jsonDecode(a)['date'] as String;
-          final bDate = jsonDecode(b)['date'] as String;
-          return bDate.compareTo(aDate);
-        } catch (_) { return 0; }
-      });
-
-      await prefs.setStringList('practiceSessions', merged);
-
-      final userDoc = await _db.collection('users').doc(uid).get();
-      final data = userDoc.data();
-      if (data != null) {
-        await prefs.setInt('currentStreak', data['currentStreak'] as int? ?? 0);
-        await prefs.setInt('longestStreak', data['longestStreak'] as int? ?? 0);
-      }
-    } catch (_) {}
-  }
   // ─────────────────────────────────────────
   // USER STATS
   // ─────────────────────────────────────────
@@ -201,16 +123,8 @@ class FirestoreService {
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-            // Notify student and CC parent
+      // Cloud Function notifies the student and CCs the parent
       try {
-        final teacherDoc = await _db.collection('users').doc(uid).get();
-        final teacherName = teacherDoc.data()?['name'] as String? ?? 'Your teacher';
-        await PushNotificationService().notifyNewAssignment(
-          studentUid: studentUid,
-          assignmentTitle: title,
-          teacherName: teacherName,
-        );
-        // Call Cloud Function to CC parent email
         final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
         await functions.httpsCallable('notifyNewAssignment').call({
           'studentUid': studentUid,
@@ -277,20 +191,10 @@ class FirestoreService {
     try {
       await _db.collection('users').doc(uid).collection('assignments').doc(assignmentId).update(updates);
 
-      // If marking complete, notify the teacher
+      // If marking complete, the Cloud Function notifies the teacher
       if (updates['completed'] == true) {
-        final assignmentDoc = await _db.collection('users').doc(uid).collection('assignments').doc(assignmentId).get();
-        final teacherUid = assignmentDoc.data()?['teacherUid'] as String?;
-        final assignmentTitle = assignmentDoc.data()?['title'] as String? ?? 'an assignment';
-        final studentDoc = await _db.collection('users').doc(uid).get();
-        final studentName = studentDoc.data()?['name'] as String? ?? 'Your student';
-        if (teacherUid != null) {
-          await PushNotificationService().notifyAssignmentCompleted(
-            teacherUid: teacherUid,
-            studentName: studentName,
-            assignmentTitle: assignmentTitle,
-          );
-        }
+        final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+        await functions.httpsCallable('notifyAssignmentCompleted').call({'assignmentId': assignmentId});
       }
     } catch (_) {}
   }
@@ -349,19 +253,12 @@ class FirestoreService {
         'seenByTeacher': true,
       });
 
-      // Notify student
-      final uid = _uid;
-      if (uid != null) {
-        final teacherDoc = await _db.collection('users').doc(uid).get();
-        final teacherName = teacherDoc.data()?['name'] as String? ?? 'Your teacher';
-        final assignmentDoc = await _db.collection('users').doc(studentUid).collection('assignments').doc(assignmentId).get();
-        final assignmentTitle = assignmentDoc.data()?['title'] as String? ?? 'your assignment';
-        await PushNotificationService().notifyFeedbackReceived(
-          studentUid: studentUid,
-          teacherName: teacherName,
-          assignmentTitle: assignmentTitle,
-        );
-      }
+      // Cloud Function notifies the student
+      final functions = FirebaseFunctions.instanceFor(region: 'us-central1');
+      await functions.httpsCallable('notifyFeedbackReceived').call({
+        'studentUid': studentUid,
+        'assignmentId': assignmentId,
+      });
     } catch (_) {}
   }
 
@@ -388,48 +285,6 @@ class FirestoreService {
   // ─────────────────────────────────────────
   // GOALS & NOTES SYNC
   // ─────────────────────────────────────────
-
-  Future<void> syncGoals() async {
-    final uid = _uid;
-    if (uid == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final goals = prefs.getStringList('longTermGoals') ?? [];
-      await _db.collection('users').doc(uid).update({
-        'goals': goals.map((s) {
-          try { return jsonDecode(s) as Map<String, dynamic>; } catch (_) { return <String, dynamic>{}; }
-        }).where((m) => m.isNotEmpty).toList(),
-      });
-    } catch (_) {}
-  }
-
-  Future<void> syncNotes() async {
-    final uid = _uid;
-    if (uid == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final notes = prefs.getStringList('lessonNotes') ?? [];
-      await _db.collection('users').doc(uid).update({
-        'lessonNotes': notes.map((s) {
-          try { return jsonDecode(s) as Map<String, dynamic>; } catch (_) { return <String, dynamic>{}; }
-        }).where((m) => m.isNotEmpty).toList(),
-      });
-    } catch (_) {}
-  }
-
-  Future<void> syncRepertoire() async {
-    final uid = _uid;
-    if (uid == null) return;
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final songs = prefs.getStringList('songs') ?? [];
-      await _db.collection('users').doc(uid).update({
-        'repertoire': songs.map((s) {
-          try { return jsonDecode(s) as Map<String, dynamic>; } catch (_) { return <String, dynamic>{}; }
-        }).where((m) => m.isNotEmpty).toList(),
-      });
-    } catch (_) {}
-  }
 
   Future<List<Map<String, dynamic>>> fetchGoals() async {
     final uid = AuthService().currentUser?.uid;

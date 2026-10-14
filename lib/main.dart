@@ -12,6 +12,7 @@ import 'widget_service.dart';
 import 'firebase_options.dart';
 import 'push_notification_service.dart';
 import 'auth_gate.dart';
+import 'account_data_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -108,9 +109,11 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
     if (state == AppLifecycleState.paused) {
       MetronomeService().stop();
       ICloudSyncService.sync();
+      AccountDataService().sync();
     }
     if (state == AppLifecycleState.resumed) {
       ICloudSyncService.syncOnLaunch();
+      AccountDataService().sync();
       WidgetService.updateWidget();
     }
   }

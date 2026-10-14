@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../firestore_service.dart';
@@ -130,7 +131,7 @@ class _NotesScreenState extends State<NotesScreen> {
     final prefs = await SharedPreferences.getInstance();
     final data = _notes.reversed.map((n) => jsonEncode(n.toJson())).toList();
     await prefs.setStringList('lessonNotes', data);
-    FirestoreService().syncNotes();
+    AccountDataService().sync();
   }
 
   void _addNote() {

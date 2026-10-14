@@ -5,6 +5,7 @@ import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
 import 'push_notification_service.dart';
+import 'account_data_service.dart';
 
 // Root of the app: shows login, onboarding or home based on sign-in state.
 // It must stay at the root of the navigator so that signing out or deleting
@@ -33,8 +34,12 @@ class AuthGate extends StatelessWidget {
           PushNotificationService().initialize();
         });
 
+        // Load this account's data onto the phone (and set aside anyone
+        // else's) before showing the app.
         return FutureBuilder<bool>(
-          future: SharedPreferences.getInstance()
+          future: AccountDataService()
+              .ensureReady(snapshot.data!.uid)
+              .then((_) => SharedPreferences.getInstance())
               .then((p) => p.getBool('onboardingComplete') ?? false),
           builder: (context, onboardingSnap) {
             if (!onboardingSnap.hasData) {

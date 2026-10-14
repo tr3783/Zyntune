@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../firestore_service.dart';
@@ -107,7 +108,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList('longTermGoals',
         _goals.map((g) => jsonEncode(g.toJson())).toList());
-    FirestoreService().syncGoals();
+    AccountDataService().sync();
   }
 
   Color _categoryColor(GoalCategory cat) {

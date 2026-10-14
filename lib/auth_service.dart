@@ -1,11 +1,10 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'push_notification_service.dart';
-import 'firestore_service.dart';
+import 'account_data_service.dart';
 import 'purchase_service.dart';
 
 class AuthService {
@@ -28,6 +27,9 @@ class AuthService {
     required String instrument,
     required String role,
   }) async {
+    // Data already on the phone belongs to someone else; don't let the new
+    // account claim it.
+    AccountDataService().markNextSignInAsNewAccount();
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email,
@@ -41,12 +43,11 @@ class AuthService {
         instrument: instrument,
         role: role,
       );
-      await _syncLocalDataToFirestore(credential.user!.uid);
-      await FirestoreService().syncFirestoreSessionsToLocal();
       await PushNotificationService().loginUser(credential.user!.uid);
       await PurchaseService().refreshGrandfathering();
       return credential;
     } on FirebaseAuthException catch (e) {
+      AccountDataService().clearNewAccountMark();
       throw _authError(e);
     }
   }
@@ -61,8 +62,6 @@ class AuthService {
         email: email,
         password: password,
       );
-      await _syncLocalDataToFirestore(credential.user!.uid);
-      await FirestoreService().syncFirestoreSessionsToLocal();
       await PushNotificationService().loginUser(credential.user!.uid);
       await PurchaseService().refreshGrandfathering();
       return credential;
@@ -94,74 +93,6 @@ class AuthService {
     });
   }
 
-  // --- Sync local SharedPreferences data to Firestore ---
-  Future<void> _syncLocalDataToFirestore(String uid) async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final sessions = prefs.getStringList('practiceSessions') ?? [];
-      final streak = prefs.getInt('currentStreak') ?? 0;
-      final longestStreak = prefs.getInt('longestStreak') ?? 0;
-      final totalMinutes = sessions.fold<int>(0, (sum, s) {
-        try {
-          final map = jsonDecode(s) as Map<String, dynamic>;
-          return sum + (map['durationMinutes'] as int? ?? 0);
-        } catch (_) { return sum; }
-      });
-
-      await _db.collection('users').doc(uid).update({
-        'currentStreak': streak,
-        'longestStreak': longestStreak,
-        'totalSessions': sessions.length,
-        'totalMinutes': totalMinutes,
-        'lastSyncedAt': FieldValue.serverTimestamp(),
-      });
-
-      if (sessions.isNotEmpty) {
-        final batch = _db.batch();
-        for (final s in sessions) {
-          try {
-            final session = jsonDecode(s) as Map<String, dynamic>;
-            final sessionId = session['id'] as String;
-            final ref = _db
-                .collection('users')
-                .doc(uid)
-                .collection('sessions')
-                .doc(sessionId);
-            batch.set(ref, {
-              ...session,
-              'savedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-          } catch (_) {}
-        }
-        await batch.commit();
-      }
-
-      final songs = prefs.getStringList('songs') ?? [];
-      if (songs.isNotEmpty) {
-        final repertoire = songs.map((s) {
-          try { return jsonDecode(s) as Map<String, dynamic>; } catch (_) { return <String, dynamic>{}; }
-        }).where((m) => m.isNotEmpty).toList();
-        await _db.collection('users').doc(uid).update({'repertoire': repertoire});
-      }
-
-      final goals = prefs.getStringList('longTermGoals') ?? [];
-      if (goals.isNotEmpty) {
-        final goalsData = goals.map((s) {
-          try { return jsonDecode(s) as Map<String, dynamic>; } catch (_) { return <String, dynamic>{}; }
-        }).where((m) => m.isNotEmpty).toList();
-        await _db.collection('users').doc(uid).update({'goals': goalsData});
-      }
-
-      final notes = prefs.getStringList('lessonNotes') ?? [];
-      if (notes.isNotEmpty) {
-        final notesData = notes.map((s) {
-          try { return jsonDecode(s) as Map<String, dynamic>; } catch (_) { return <String, dynamic>{}; }
-        }).where((m) => m.isNotEmpty).toList();
-        await _db.collection('users').doc(uid).update({'lessonNotes': notesData});
-      }
-    } catch (_) {}
-  }
-
   // --- Get user profile ---
   Future<Map<String, dynamic>?> getUserProfile() async {
     final uid = currentUser?.uid;
@@ -176,6 +107,10 @@ class AuthService {
 
   // --- Sign out ---
   Future<void> signOut() async {
+    // Back up and clear this account's data so the next person to sign in
+    // on this device doesn't see it.
+    await AccountDataService().backupAndClear();
+    await PushNotificationService().logoutUser();
     await _auth.signOut();
   }
 
@@ -208,6 +143,8 @@ class AuthService {
       await _deleteCollection(userDoc.collection('assignments'));
       await userDoc.delete();
       await user.delete();
+      await AccountDataService().clearForDeletedAccount(user.uid);
+      await PushNotificationService().logoutUser();
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
         throw reloginMessage;
