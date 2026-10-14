@@ -110,7 +110,7 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused) {
-      MetronomeService().stop();
+      // The metronome keeps playing in the background (screen locked, other apps).
       ICloudSyncService.sync();
       AccountDataService().sync();
     }

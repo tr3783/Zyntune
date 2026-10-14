@@ -18,6 +18,10 @@ class MetronomeService extends ChangeNotifier {
     _channel.setMethodCallHandler((call) async {
       if (call.method == 'onBeat') {
         if (isPlaying) notifyListeners();
+      } else if (call.method == 'onStopped') {
+        // iOS stopped the audio (phone call, headphones unplugged...).
+        isPlaying = false;
+        notifyListeners();
       }
     });
   }

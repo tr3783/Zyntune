@@ -19,6 +19,40 @@ import Flutter
     override init() {
         super.init()
         setupAudio()
+        observeAudioSession()
+    }
+
+    // The metronome keeps playing in the background (screen locked, other
+    // apps). Stop cleanly when iOS takes the audio away, and tell Flutter so
+    // the UI shows the Play button instead of a silent "playing" state.
+    private func observeAudioSession() {
+        let center = NotificationCenter.default
+        center.addObserver(self, selector: #selector(handleInterruption(_:)),
+                           name: AVAudioSession.interruptionNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleRouteChange(_:)),
+                           name: AVAudioSession.routeChangeNotification, object: nil)
+    }
+
+    // Phone call, alarm, Siri...
+    @objc private func handleInterruption(_ notification: Notification) {
+        guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: raw) == .began else { return }
+        stopAndNotify()
+    }
+
+    // Headphones unplugged: stop rather than suddenly play out loud.
+    @objc private func handleRouteChange(_ notification: Notification) {
+        guard let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              AVAudioSession.RouteChangeReason(rawValue: raw) == .oldDeviceUnavailable else { return }
+        stopAndNotify()
+    }
+
+    private func stopAndNotify() {
+        DispatchQueue.main.async {
+            guard self.isPlaying else { return }
+            self.stop()
+            MetronomeEngine.channel?.invokeMethod("onStopped", arguments: nil)
+        }
     }
 
     private func setupAudio() {
@@ -86,6 +120,8 @@ import Flutter
               let click = clickBuffer,
               let subClick = subClickBuffer else { return }
 
+        // After an interruption the session may be inactive and the engine stopped.
+        try? AVAudioSession.sharedInstance().setActive(true)
         if !engine.isRunning {
             try? engine.start()
         }
