@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import '../account_data_service.dart';
 import '../date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -23,6 +24,7 @@ class PracticeSession {
   String notes;
   String instrument;
   String piece;
+  String movement;
 
   PracticeSession({
     required this.id,
@@ -31,7 +33,11 @@ class PracticeSession {
     required this.notes,
     this.instrument = '',
     this.piece = '',
+    this.movement = '',
   });
+
+  /// "Piece · Movement", or just the piece.
+  String get pieceLabel => movement.isEmpty ? piece : '$piece · $movement';
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -40,6 +46,7 @@ class PracticeSession {
         'notes': notes,
         'instrument': instrument,
         'piece': piece,
+        if (movement.isNotEmpty) 'movement': movement,
       };
 
   factory PracticeSession.fromJson(Map<String, dynamic> json) =>
@@ -50,6 +57,7 @@ class PracticeSession {
         notes: json['notes'] ?? '',
         instrument: json['instrument'] ?? '',
         piece: json['piece'] ?? '',
+        movement: json['movement'] ?? '',
       );
 }
 
@@ -74,6 +82,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   List<String> _pieceNames = [];
   // Map of piece title -> composer (for grouping in selector)
   Map<String, String> _pieceComposers = {};
+  Map<String, List<String>> _pieceMovements = {};
+  int _repertoireCount = 0;
   Set<String> _assignedPieces = {};
   bool _countdownSaveDialogShown = false;
   // The app-wide countdown handler to restore when this screen closes.
@@ -187,6 +197,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final data = prefs.getStringList('songs') ?? [];
     final names = <String>[];
     final composers = <String, String>{};
+    final movements = <String, List<String>>{};
     for (final s in data) {
       try {
         final map = jsonDecode(s) as Map<String, dynamic>;
@@ -195,6 +206,15 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         if (title.isNotEmpty) {
           names.add(title);
           composers[title] = composer;
+          final rawMovements = map['movements'];
+          if (rawMovements is List) {
+            movements[title] = rawMovements
+                .map((m) => m is Map ? (m['title'] ?? '').toString() : m.toString())
+                .where((t) => t.trim().isNotEmpty)
+                .toList();
+          } else if (rawMovements is String && rawMovements.trim().isNotEmpty) {
+            movements[title] = [rawMovements];
+          }
         }
       } catch (_) {}
     }
@@ -202,6 +222,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       setState(() {
       _pieceNames = names;
       _pieceComposers = composers;
+      _pieceMovements = movements;
+      _repertoireCount = data.length;
     });
     }
   }
@@ -270,7 +292,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     await prefs.setStringList('practiceSessions', data);
   }
 
-  Future<void> _saveNewSession(String instrument, int durationSeconds, {String notes = '', String piece = ''}) async {
+  Future<void> _saveNewSession(String instrument, int durationSeconds,
+      {String notes = '', String piece = '', String movement = '', DateTime? date}) async {
     final minutes = (durationSeconds / 60).floor();
     if (minutes <= 0) {
       if (mounted) {
@@ -281,17 +304,30 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       }
       return;
     }
+    final now = DateTime.now();
+    // A session logged for an earlier day keeps that date and doesn't count
+    // toward today's streak.
+    final isPastDay = date != null && DateUtils.dateOnly(date).isBefore(DateUtils.dateOnly(now));
     final newSession = PracticeSession(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      date: DateTime.now().toString().substring(0, 16),
+      id: now.millisecondsSinceEpoch.toString(),
+      date: (isPastDay ? date : now).toString().substring(0, 16),
       durationMinutes: minutes,
       notes: notes,
       instrument: instrument,
       piece: piece,
+      movement: movement,
     );
-    setState(() => _sessions.insert(0, newSession));
+    setState(() {
+      _sessions.insert(0, newSession);
+      _sessions.sort((a, b) => b.date.compareTo(a.date));
+    });
     await _saveSessions();
     await FirestoreService().saveSession(newSession.toJson());
+    if (isPastDay) {
+      await WidgetService.updateWidget();
+      HapticFeedback.mediumImpact();
+      return;
+    }
     await StreakHelper.updateStreak();
     await _loadStreak();
     await ReviewHelper.maybeRequestReviewAfterSession();
@@ -349,8 +385,6 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     for (final p in _pieceNames) {
       if (!combined.contains(p)) combined.add(p);
     }
-    if (combined.isEmpty) return const SizedBox.shrink();
-
     // Group by composer
     final Map<String, List<String>> groups = {};
     for (final name in combined) {
@@ -382,20 +416,40 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         const Text('Piece (optional)', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
 
-        // Free practice chip
-        GestureDetector(
-          onTap: () => setDialogState(() => selectedRef[0] = ''),
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              gradient: selectedRef[0] == '' ? const LinearGradient(colors: [Color(0xFFE91E8C), Color(0xFF9B59B6)]) : null,
-              color: selectedRef[0] == '' ? null : Colors.white.withOpacity(0.07),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: selectedRef[0] == '' ? Colors.transparent : _purple.withOpacity(0.3)),
+        // Free practice and "+ Add piece" chips
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: Wrap(spacing: 8, runSpacing: 8, children: [
+            GestureDetector(
+              onTap: () => setDialogState(() => _selectPiece(selectedRef, '')),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  gradient: selectedRef[0] == '' ? const LinearGradient(colors: [Color(0xFFE91E8C), Color(0xFF9B59B6)]) : null,
+                  color: selectedRef[0] == '' ? null : Colors.white.withOpacity(0.07),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: selectedRef[0] == '' ? Colors.transparent : _purple.withOpacity(0.3)),
+                ),
+                child: Text('Free practice', style: TextStyle(color: selectedRef[0] == '' ? Colors.white : Colors.white60, fontSize: 12, fontWeight: selectedRef[0] == '' ? FontWeight.bold : FontWeight.normal)),
+              ),
             ),
-            child: Text('Free practice', style: TextStyle(color: selectedRef[0] == '' ? Colors.white : Colors.white60, fontSize: 12, fontWeight: selectedRef[0] == '' ? FontWeight.bold : FontWeight.normal)),
-          ),
+            GestureDetector(
+              onTap: () => _addPieceFromDialog(selectedRef, setDialogState),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.07),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: const Color(0xFFE91E8C).withValues(alpha: 0.5)),
+                ),
+                child: const Row(mainAxisSize: MainAxisSize.min, children: [
+                  Icon(Icons.add, size: 14, color: Color(0xFFE91E8C)),
+                  SizedBox(width: 4),
+                  Text('Add piece', style: TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ),
+          ]),
         ),
 
         // Grouped by composer
@@ -425,7 +479,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                     final isSelected = selectedRef[0] == name;
                     final isAssigned = _assignedPieces.contains(name);
                     return GestureDetector(
-                      onTap: () => setDialogState(() => selectedRef[0] = name),
+                      onTap: () => setDialogState(() => _selectPiece(selectedRef, name)),
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
@@ -450,6 +504,9 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
           );
         }),
 
+        // Movement of the selected piece, if it has movements
+        ..._buildMovementSelector(selectedRef, setDialogState),
+
         if (_assignedPieces.isNotEmpty) ...[
           const SizedBox(height: 4),
           Row(children: [
@@ -461,6 +518,128 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         const SizedBox(height: 16),
       ],
     );
+  }
+
+  // selectedRef is [piece, movement]; choosing a piece resets the movement.
+  void _selectPiece(List<String> selectedRef, String piece) {
+    selectedRef[0] = piece;
+    if (selectedRef.length > 1) selectedRef[1] = '';
+  }
+
+  List<Widget> _buildMovementSelector(List<String> selectedRef, StateSetter setDialogState) {
+    final movements = _pieceMovements[selectedRef[0]] ?? const <String>[];
+    if (selectedRef.length < 2 || movements.isEmpty) return const [];
+    Widget chip(String label, String value) {
+      final isSelected = selectedRef[1] == value;
+      return GestureDetector(
+        onTap: () => setDialogState(() => selectedRef[1] = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            gradient: isSelected ? const LinearGradient(colors: [Color(0xFFE91E8C), Color(0xFF9B59B6)]) : null,
+            color: isSelected ? null : Colors.white.withValues(alpha: 0.07),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: isSelected ? Colors.transparent : _purple.withValues(alpha: 0.3)),
+          ),
+          child: Text(label, style: TextStyle(color: isSelected ? Colors.white : Colors.white60, fontSize: 12, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+        ),
+      );
+    }
+    return [
+      const Text('Movement', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+      const SizedBox(height: 8),
+      Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Wrap(spacing: 8, runSpacing: 8, children: [
+          chip('Whole piece', ''),
+          ...movements.map((m) => chip(m, m)),
+        ]),
+      ),
+    ];
+  }
+
+  /// Adds a new piece to the repertoire (as "Working On") from the save dialog
+  /// and selects it. Follows the free-tier repertoire limit.
+  Future<void> _addPieceFromDialog(List<String> selectedRef, StateSetter setDialogState) async {
+    if (!PurchaseService().isPro && _repertoireCount >= 10) {
+      await showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          backgroundColor: _cardBg,
+          title: const Text('Repertoire Limit Reached', style: TextStyle(color: Colors.white)),
+          content: const Text('Free accounts can store up to 10 pieces. Upgrade to Zyntune Pro for unlimited repertoire.', style: TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Not Now', style: TextStyle(color: Colors.white38))),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white),
+              child: const Text('Upgrade to Pro'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    final titleController = TextEditingController();
+    final composerController = TextEditingController();
+    final added = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: _cardBg,
+        title: const Text('Add to Repertoire', style: TextStyle(color: Colors.white)),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          TextField(
+            controller: titleController,
+            autofocus: true,
+            textCapitalization: TextCapitalization.words,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(labelText: 'Piece title', labelStyle: TextStyle(color: Colors.white60)),
+          ),
+          TextField(
+            controller: composerController,
+            textCapitalization: TextCapitalization.words,
+            style: const TextStyle(color: Colors.white),
+            decoration: const InputDecoration(labelText: 'Composer (optional)', labelStyle: TextStyle(color: Colors.white60)),
+          ),
+          const SizedBox(height: 8),
+          const Text('Add movements later in Repertoire.', style: TextStyle(color: Colors.white38, fontSize: 11)),
+        ]),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel', style: TextStyle(color: Colors.white38))),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, titleController.text.trim()),
+            style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white),
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
+    final title = added?.trim() ?? '';
+    if (title.isEmpty) return;
+
+    final existing = _pieceNames.firstWhere((n) => n.toLowerCase() == title.toLowerCase(), orElse: () => '');
+    if (existing.isEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      final songs = prefs.getStringList('songs') ?? [];
+      songs.add(jsonEncode({
+        'id': DateTime.now().millisecondsSinceEpoch.toString(),
+        'title': title,
+        'composer': composerController.text.trim(),
+        'movements': <Map<String, dynamic>>[],
+        'status': 'workingOn',
+        'notes': '',
+        'link': '',
+        'goalMinutes': 0,
+      }));
+      await prefs.setStringList('songs', songs);
+      AccountDataService().sync();
+      await _loadPieces();
+    }
+    setDialogState(() => _selectPiece(selectedRef, existing.isEmpty ? title : existing));
   }
 
   void _showSharePrompt({required int minutes, required String piece, required String instrument, required String date}) {
@@ -490,7 +669,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   Future<void> _showSaveDialog() async {
     _notesController.clear();
     final instrumentRef = [_activeInstrument];
-    final pieceRef = [''];
+    final pieceRef = ['', ''];
     bool saved = false;
     int savedMinutes = 0;
     String savedPiece = '';
@@ -538,7 +717,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
               onPressed: () async {
                 savedMinutes = (_timerService.elapsed / 60).floor();
                 savedPiece = pieceRef[0];
-                await _saveNewSession(instrumentRef[0], _timerService.elapsed, notes: _notesController.text.trim(), piece: pieceRef[0]);
+                await _saveNewSession(instrumentRef[0], _timerService.elapsed, notes: _notesController.text.trim(), piece: pieceRef[0], movement: pieceRef[1]);
                 saved = true;
                 if (mounted) Navigator.pop(context);
               },
@@ -562,7 +741,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   Future<void> _showCountdownSaveDialog(int totalSeconds) async {
     final notesController = TextEditingController();
     final instrumentRef = [_activeInstrument];
-    final pieceRef = [''];
+    final pieceRef = ['', ''];
     final minutes = (totalSeconds / 60).floor();
     bool saved = false;
     String savedPiece = '';
@@ -613,7 +792,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
             ElevatedButton(
               onPressed: () async {
                 savedPiece = pieceRef[0];
-                await _saveNewSession(instrumentRef[0], totalSeconds, notes: notesController.text.trim(), piece: pieceRef[0]);
+                await _saveNewSession(instrumentRef[0], totalSeconds, notes: notesController.text.trim(), piece: pieceRef[0], movement: pieceRef[1]);
                 saved = true;
                 _timerService.resetCountdown();
                 _countdownSaveDialogShown = false;
@@ -640,7 +819,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final minutesController = TextEditingController();
     final notesController = TextEditingController();
     final instrumentRef = [_activeInstrument];
-    final pieceRef = [''];
+    final pieceRef = ['', ''];
     DateTime selectedDate = DateTime.now();
 
     await showDialog(
@@ -716,8 +895,8 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
               onPressed: () async {
                 final mins = int.tryParse(minutesController.text.trim());
                 if (mins == null || mins <= 0) return;
-                final dateStr = '${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}-${selectedDate.day.toString().padLeft(2, '0')} 00:00';
-                await _saveNewSession(instrumentRef[0], mins * 60, notes: notesController.text.trim(), piece: pieceRef[0]);
+                await _saveNewSession(instrumentRef[0], mins * 60,
+                    notes: notesController.text.trim(), piece: pieceRef[0], movement: pieceRef[1], date: selectedDate);
                 if (mounted) Navigator.pop(context);
               },
               style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
@@ -732,7 +911,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     final editNotesController = TextEditingController(text: session.notes);
     final editMinutesController = TextEditingController(text: session.durationMinutes.toString());
     final instrumentRef = [session.instrument.isNotEmpty ? session.instrument : _activeInstrument];
-    final pieceRef = [session.piece];
+    final pieceRef = [session.piece, session.movement];
 
     showDialog(
       context: context,
@@ -787,6 +966,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                   session.notes = editNotesController.text.trim();
                   session.instrument = instrumentRef[0];
                   session.piece = pieceRef[0];
+                  session.movement = pieceRef[1];
                 });
                 await _saveSessions();
                 await FirestoreService().updateSession(session.toJson());
@@ -1033,7 +1213,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                                   Text('${session.durationMinutes} min', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                                   if (session.instrument.isNotEmpty) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: _purple.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text(session.instrument, style: const TextStyle(color: Color(0xFF9B59B6), fontSize: 10)))],
                                 ]),
-                                if (session.piece.isNotEmpty) Text(session.piece, style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                if (session.piece.isNotEmpty) Text(session.pieceLabel, style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                                 Text(session.notes.isEmpty ? displayDate : '$displayDate • ${session.notes}', style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                               ])),
                               IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFF9B59B6)), onPressed: () => _showEditDialog(session)),

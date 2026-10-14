@@ -662,6 +662,8 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                   final date = _formatDate(s['date'] as String? ?? '');
                   final duration = s['durationMinutes'] as int? ?? 0;
                   final piece = s['piece'] as String? ?? '';
+                  final movement = s['movement'] as String? ?? '';
+                  final pieceLabel = movement.isEmpty ? piece : '$piece · $movement';
                   final notes = s['notes'] as String? ?? '';
                   final inst = s['instrument'] as String? ?? '';
                   final isRecent = recentIds.contains(s['id']);
@@ -677,7 +679,7 @@ class _StudentDetailScreenState extends State<StudentDetailScreen> {
                           Text('$duration min', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                           if (inst.isNotEmpty) ...[const SizedBox(width: 8), Container(padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2), decoration: BoxDecoration(color: _purple.withOpacity(0.2), borderRadius: BorderRadius.circular(8)), child: Text(inst, style: const TextStyle(color: Color(0xFF9B59B6), fontSize: 10)))],
                         ]),
-                        if (piece.isNotEmpty) Text(piece, style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600)),
+                        if (piece.isNotEmpty) Text(pieceLabel, style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600)),
                         Text(notes.isEmpty ? date : '$date • $notes', style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
                       ])),
                     ]),

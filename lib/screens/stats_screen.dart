@@ -813,7 +813,7 @@ Keep practicing! 🎸''';
                                 ],
                               ]),
                               if ((session['piece'] as String? ?? '').isNotEmpty)
-                                Text(session['piece'] as String, style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Text((session['movement'] as String? ?? '').isEmpty ? session['piece'] as String : '${session['piece']} · ${session['movement']}', style: const TextStyle(color: Color(0xFFE91E8C), fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                               Text(session['notes'] != null && session['notes'].isNotEmpty ? '$displayDate • ${session['notes']}' : displayDate, style: const TextStyle(color: Colors.white54, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
                             ])),
                             const Icon(Icons.swipe_left, size: 14, color: Colors.white24),
