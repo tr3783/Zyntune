@@ -258,7 +258,15 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
   Future<void> _saveNewSession(String instrument, int durationSeconds, {String notes = '', String piece = ''}) async {
     final minutes = (durationSeconds / 60).floor();
-    if (minutes <= 0) return;
+    if (minutes <= 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Sessions under 1 minute aren\'t saved.'),
+          duration: Duration(seconds: 3),
+        ));
+      }
+      return;
+    }
     final newSession = PracticeSession(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       date: DateTime.now().toString().substring(0, 16),

@@ -73,8 +73,6 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 const SizedBox(height: 12),
                 const _FeatureRow(emoji: '📸', title: 'Shareable Session Cards', subtitle: 'Share your practice to iMessage, Instagram and more'),
                 const SizedBox(height: 12),
-                const _FeatureRow(emoji: '☁️', title: 'iCloud Sync', subtitle: 'Your data backed up and synced across devices'),
-                const SizedBox(height: 12),
                 const _FeatureRow(emoji: '🚀', title: 'All Future Features', subtitle: 'Every new Pro feature as Zyntune grows'),
                 const SizedBox(height: 32),
 

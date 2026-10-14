@@ -115,10 +115,13 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _maybeShowWhatsNew() async {
     final prefs = await SharedPreferences.getInstance();
-    const currentVersion = '2.4.9';
+    const currentVersion = '2.5.1';
     final lastSeenVersion = prefs.getString('lastWhatsNewVersion') ?? '';
     if (lastSeenVersion == currentVersion) return;
     await prefs.setString('lastWhatsNewVersion', currentVersion);
+    // Brand-new users have nothing to compare against, so skip it for them.
+    final isNewUser = lastSeenVersion.isEmpty && (prefs.getStringList('practiceSessions') ?? []).isEmpty;
+    if (isNewUser) return;
     await Future.delayed(const Duration(milliseconds: 800));
     if (!mounted) return;
 
@@ -135,9 +138,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 content: const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Divider(color: Colors.white12),
           SizedBox(height: 12),
-          _WhatsNewRow(emoji: '🎵', text: 'Metronome +/- buttons — tap to change tempo by 1, hold for 5, even while playing'),
-          _WhatsNewRow(emoji: '👩‍🏫', text: 'My Teacher — see who you\'re linked with right in Settings'),
-          _WhatsNewRow(emoji: '🔥', text: 'Smarter streak reminders — no reminder if you\'ve already practiced today'),
+          _WhatsNewRow(emoji: '☁️', text: 'Everything backs up to your account — practice history, repertoire, goals, notes and calendar'),
+          _WhatsNewRow(emoji: '👨‍👩‍👧', text: 'Sharing a device? Each account now keeps its own practice data'),
+          _WhatsNewRow(emoji: '👩‍🏫', text: 'Teachers can now see their students\' repertoire'),
           _WhatsNewRow(emoji: '🛠️', text: 'Bug fixes and reliability improvements'),
         ]),
         actions: [

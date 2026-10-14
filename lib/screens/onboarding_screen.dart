@@ -296,7 +296,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             _buildProFeatureRow('📅', 'Practice calendar with events and deadlines'),
             _buildProFeatureRow('📊', 'Weekly report card and advanced stats'),
             _buildProFeatureRow('📸', 'Shareable session cards'),
-            _buildProFeatureRow('☁️', 'iCloud sync across devices'),
             const SizedBox(height: 16),
             const Text('\$2.99/month or \$19.99/year', style: TextStyle(color: Colors.white70, fontSize: 13)),
             const SizedBox(height: 4),
