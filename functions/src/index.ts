@@ -54,11 +54,15 @@ async function sendPush(targetUid: string, title: string, body: string, data: Re
     console.error("No OneSignal REST API key found");
     return;
   }
-  const response = await fetch("https://onesignal.com/api/v1/notifications", {
+  // OneSignal's newer app API keys ("os_v2_...") use the "Key" scheme and the
+  // api.onesignal.com endpoint; legacy REST API keys use "Basic".
+  const isV2Key = restApiKey.startsWith("os_v2_");
+  const url = isV2Key ? "https://api.onesignal.com/notifications" : "https://onesignal.com/api/v1/notifications";
+  const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Authorization": `Basic ${restApiKey}`,
+      "Authorization": `${isV2Key ? "Key" : "Basic"} ${restApiKey}`,
     },
     body: JSON.stringify({
       app_id: ONESIGNAL_APP_ID,
