@@ -67,8 +67,18 @@ class TimerService extends ChangeNotifier {
 
   VoidCallback? onCountdownFinished;
 
-  /// Call this on app resume to resync countdown state
-  Future<void> syncOnResume() async {
+  // Finishing this many seconds late means the app was suspended; skip the
+  // in-app alert because the notification already played.
+  static const int _lateAlertSeconds = 3;
+
+  Future<void>? _syncing;
+
+  /// Call on app launch and resume to resync countdown state (e.g. a countdown
+  /// that finished while iOS had closed the app). Safe to call from several
+  /// places at once.
+  Future<void> syncOnResume() => _syncing ??= _syncOnResume().whenComplete(() => _syncing = null);
+
+  Future<void> _syncOnResume() async {
     // If a countdown is already active in memory, it's authoritative —
     // don't let stale persisted data overwrite it.
     if (_countdownEndTime != null) return;
@@ -91,9 +101,12 @@ class TimerService extends ChangeNotifier {
       countdownRemaining = 0;
       countdownActive = false;
       countdownFinished = true;
-      _clearPersistedEndTime(prefs);
-      HapticFeedback.heavyImpact();
-      _playAlertSound();
+      await _clearPersistedEndTime(prefs);
+      // The scheduled notification already alerted the user on time.
+      if (remaining > -_lateAlertSeconds) {
+        HapticFeedback.heavyImpact();
+        _playAlertSound();
+      }
       notifyListeners();
       Future.delayed(Duration.zero, () => onCountdownFinished?.call());
     } else {
@@ -137,8 +150,12 @@ class TimerService extends ChangeNotifier {
           countdownActive = false;
           countdownFinished = true;
           _clearPersistedEndTime(null);
-          HapticFeedback.heavyImpact();
-          _playAlertSound();
+          // If the app was suspended past the end time, the scheduled
+          // notification already alerted the user; don't alert again.
+          if (remaining > -_lateAlertSeconds) {
+            HapticFeedback.heavyImpact();
+            _playAlertSound();
+          }
           notifyListeners();
           Future.delayed(Duration.zero, () => onCountdownFinished?.call());
         } else {

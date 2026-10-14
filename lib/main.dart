@@ -17,9 +17,15 @@ import 'account_data_service.dart';
 
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
-void _showGlobalCountdownDialog() {
+Future<void> _showGlobalCountdownDialog() async {
+  // Signed out: keep the finished countdown; the timer screen offers to save
+  // it after sign-in.
+  final user = FirebaseAuth.instance.currentUser;
+  if (user == null) return;
+  // On launch, wait until the account's data is loaded before saving into it.
+  await AccountDataService().ensureReady(user.uid);
   final context = navigatorKey.currentContext;
-  if (context == null) return;
+  if (context == null || !context.mounted) return;
   showDialog(
     context: context,
     barrierDismissible: false,
@@ -107,6 +113,8 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    // A countdown may have finished while iOS had closed the app.
+    WidgetsBinding.instance.addPostFrameCallback((_) => TimerService().syncOnResume());
   }
 
   @override
@@ -123,6 +131,7 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
       AccountDataService().sync();
     }
     if (state == AppLifecycleState.resumed) {
+      TimerService().syncOnResume();
       ICloudSyncService.syncOnLaunch();
       AccountDataService().sync();
       WidgetService.updateWidget();
