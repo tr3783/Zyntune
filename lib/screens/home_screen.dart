@@ -22,6 +22,7 @@ import 'paywall_screen.dart';
 import 'studio_screen.dart';
 import 'assignments_widget.dart';
 import 'teacher_reminder_card.dart';
+import '../notification_router.dart';
 import 'link_teacher_screen.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -89,6 +90,32 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadUserRole();
     _todayDate = _formatDate(DateTime.now());
     _maybeShowWhatsNew();
+    NotificationRouter().homeFocus.addListener(_onHomeFocus);
+    // A notification tap may have asked for a section before this screen existed.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _onHomeFocus());
+  }
+
+  @override
+  void dispose() {
+    NotificationRouter().homeFocus.removeListener(_onHomeFocus);
+    super.dispose();
+  }
+
+  // Sections a tapped notification can bring into view.
+  final _reminderKey = GlobalKey();
+  final _assignmentsKey = GlobalKey();
+
+  void _onHomeFocus() {
+    final focus = NotificationRouter().homeFocus.value;
+    if (focus == null || !mounted) return;
+    NotificationRouter().homeFocus.value = null;
+    // Give the reminder/assignments streams a moment to load.
+    Future.delayed(const Duration(milliseconds: 600), () {
+      final target = (focus == HomeFocus.reminder ? _reminderKey : _assignmentsKey).currentContext;
+      if (target != null && target.mounted) {
+        Scrollable.ensureVisible(target, duration: const Duration(milliseconds: 400), curve: Curves.easeInOut, alignment: 0.1);
+      }
+    });
   }
 
   Future<List<Map<String, dynamic>>> _loadLocalSessions() async {
@@ -626,10 +653,10 @@ class _HomeScreenState extends State<HomeScreen> {
             const SizedBox(height: 20),
 
             // --- Latest teacher reminder (students) ---
-            const TeacherReminderCard(),
+            TeacherReminderCard(key: _reminderKey),
 
             // --- Teacher Assignments (all users) ---
-            const AssignmentsWidget(),
+            AssignmentsWidget(key: _assignmentsKey),
 
             // --- Today's Objectives ---
             Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [

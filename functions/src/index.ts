@@ -281,7 +281,8 @@ export const notifyAssignmentCompleted = onCall(async (request) => {
   const studentName = studentDoc.data()?.name as string | undefined ?? "Your student";
   const assignmentTitle = assignment.title as string | undefined ?? "an assignment";
 
-  await sendPush(teacherUid, `✅ ${studentName} completed an assignment`, assignmentTitle, { type: "assignment_completed" });
+  // studentUid lets the app open this student's page when the teacher taps it.
+  await sendPush(teacherUid, `✅ ${studentName} completed an assignment`, assignmentTitle, { type: "assignment_completed", studentUid });
   return { success: true };
 });
 

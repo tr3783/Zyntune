@@ -12,10 +12,10 @@ import 'widget_service.dart';
 import 'firebase_options.dart';
 import 'push_notification_service.dart';
 import 'auth_gate.dart';
+import 'navigation.dart';
 import 'screens/timer_screen.dart';
 import 'account_data_service.dart';
 
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 Future<void> _showGlobalCountdownDialog() async {
   // Signed out: keep the finished countdown; the timer screen offers to save
