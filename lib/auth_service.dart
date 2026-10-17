@@ -5,6 +5,8 @@ import 'dart:math';
 import 'package:crypto/crypto.dart';
 import 'push_notification_service.dart';
 import 'account_data_service.dart';
+import 'recordings.dart';
+import 'recording_service.dart';
 import 'purchase_service.dart';
 
 class AuthService {
@@ -107,6 +109,8 @@ class AuthService {
 
   // --- Sign out ---
   Future<void> signOut() async {
+    // Save a recording in progress (under this account) rather than lose it.
+    await RecordingService().stopAndKeepForSignOut();
     // Back up and clear this account's data so the next person to sign in
     // on this device doesn't see it.
     await AccountDataService().backupAndClear();
@@ -148,6 +152,8 @@ class AuthService {
       await userDoc.delete();
       await user.delete();
       await AccountDataService().clearForDeletedAccount(user.uid);
+      await RecordingService().stop();
+      await RecordingStore(user.uid).deleteAll();
       await PushNotificationService().logoutUser();
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {

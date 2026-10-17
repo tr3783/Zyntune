@@ -13,6 +13,8 @@ import 'firebase_options.dart';
 import 'push_notification_service.dart';
 import 'auth_gate.dart';
 import 'navigation.dart';
+import 'recording_service.dart';
+import 'screens/recording_flow.dart';
 import 'screens/timer_screen.dart';
 import 'account_data_service.dart';
 
@@ -154,6 +156,23 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
       ),
       themeMode: ThemeMode.dark,
       home: const AuthGate(),
+      // While recording, a "● Recording · Stop" bar sits below every screen.
+      // The screens shrink to make room so the bar never covers controls.
+      // (The tree shape stays the same either way, so navigation isn't reset.)
+      builder: (context, child) => ListenableBuilder(
+        listenable: RecordingService(),
+        child: child,
+        builder: (context, child) => Column(children: [
+          Expanded(
+            child: MediaQuery.removePadding(
+              context: context,
+              removeBottom: RecordingService().isRecording,
+              child: child ?? const SizedBox.shrink(),
+            ),
+          ),
+          const RecordingBar(),
+        ]),
+      ),
     );
   }
 }

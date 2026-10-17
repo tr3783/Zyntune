@@ -31,6 +31,17 @@ import Flutter
                            name: AVAudioSession.interruptionNotification, object: nil)
         center.addObserver(self, selector: #selector(handleRouteChange(_:)),
                            name: AVAudioSession.routeChangeNotification, object: nil)
+        center.addObserver(self, selector: #selector(handleEngineConfigurationChange(_:)),
+                           name: .AVAudioEngineConfigurationChange, object: audioEngine)
+    }
+
+    // Starting a recording switches the audio session to play-and-record,
+    // which stops the audio engine. Restart it and carry on playing.
+    @objc private func handleEngineConfigurationChange(_ notification: Notification) {
+        DispatchQueue.main.async {
+            guard self.isPlaying else { return }
+            self.start(bpm: self.bpm, subdivision: self.subdivision)
+        }
     }
 
     // Phone call, alarm, Siri...

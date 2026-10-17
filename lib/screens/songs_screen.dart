@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:convert';
 import 'paywall_screen.dart';
+import 'recordings_screen.dart';
 import '../purchase_service.dart';
 
 enum PieceStatus { wishlist, workingOn, performanceReady }
@@ -723,6 +724,7 @@ class _SongsScreenState extends State<SongsScreen> {
                                     Column(
                                       children: [
                                         if (piece.link.isNotEmpty) IconButton(icon: const Icon(Icons.open_in_new, color: Color(0xFF2196F3), size: 18), onPressed: () => _launchLink(piece.link)),
+                                        IconButton(tooltip: 'Recordings', icon: const Icon(Icons.mic, size: 18, color: Color(0xFFE53935)), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecordingsScreen(piece: piece.title)))),
                                         IconButton(icon: const Icon(Icons.edit_outlined, size: 18, color: Color(0xFFE91E8C)), onPressed: () => _showEditPieceDialog(piece)),
                                         PopupMenuButton<String>(
                                           icon: const Icon(Icons.more_vert, color: Colors.white54, size: 18),

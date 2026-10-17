@@ -29,7 +29,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Zyntune needs microphone access for the tuner to detect pitch.</string>
+	<string>Zyntune uses the microphone for the tuner and to record your practice and lessons when you choose to.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UIBackgroundModes</key>

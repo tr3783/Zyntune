@@ -22,6 +22,7 @@ import 'paywall_screen.dart';
 import 'studio_screen.dart';
 import 'assignments_widget.dart';
 import 'teacher_reminder_card.dart';
+import 'recordings_screen.dart';
 import '../notification_router.dart';
 import 'link_teacher_screen.dart';
 
@@ -698,6 +699,7 @@ class _HomeScreenState extends State<HomeScreen> {
               children: [
                 _ToolButton(icon: Icons.music_note, label: 'Metronome', color: const Color(0xFF6B21FF), onTap: () => _navigate(context, const MetronomeScreen())),
                 _ToolButton(icon: Icons.timer_outlined, label: 'Timer', color: const Color(0xFF00BFA5), onTap: () => _navigate(context, const TimerScreen())),
+                _ToolButton(icon: Icons.mic, label: 'Record', color: const Color(0xFFE53935), onTap: () => _navigate(context, const RecordingsScreen())),
                 _ToolButton(icon: Icons.flag_outlined, label: 'Goals', color: const Color(0xFFFF6B35), onTap: () => _navigate(context, const GoalsScreen())),
                 _ToolButton(icon: Icons.library_music_outlined, label: 'Repertoire', color: const Color(0xFFE91E8C), onTap: () => _navigate(context, const SongsScreen())),
                 _ToolButton(icon: Icons.bar_chart, label: 'Stats', color: const Color(0xFF2196F3), onTap: () => _navigate(context, const StatsScreen())),

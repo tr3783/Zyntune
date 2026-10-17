@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'recording_flow.dart';
+import '../recording_service.dart';
 import '../account_data_service.dart';
 import '../date_format.dart';
 import 'package:flutter/services.dart';
@@ -1038,6 +1040,20 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       backgroundColor: _darkBg,
       appBar: AppBar(
         title: const Text('Practice Timer', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        actions: [
+          // Record while practicing; the recording bar shows it's running.
+          ListenableBuilder(
+            listenable: RecordingService(),
+            builder: (context, _) {
+              final recording = RecordingService().isRecording;
+              return IconButton(
+                tooltip: recording ? 'Stop recording' : 'Record',
+                icon: Icon(recording ? Icons.stop_circle : Icons.mic, color: recording ? const Color(0xFFFF8A80) : Colors.white),
+                onPressed: () => recording ? stopRecording(context) : startRecording(context),
+              );
+            },
+          ),
+        ],
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
