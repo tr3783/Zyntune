@@ -70,4 +70,17 @@ void main() {
     expect(await amy.load(), isEmpty);
     expect(await RecordingStore('joe', baseDir: base).count(), 1);
   });
+
+  test('videos are remembered as videos and don\'t count toward the free audio limit', () async {
+    final store = RecordingStore('amy', baseDir: base);
+    await addRecording(store, 'a1');
+    await File(await store.newFilePath('v1', extension: 'mp4')).writeAsString('video');
+    await store.add(Recording(id: 'v1', fileName: 'v1.mp4', createdAt: DateTime(2026, 10, 17), durationMs: 1000, title: 'Bowing', isVideo: true));
+    final loaded = await store.load();
+    expect(loaded.firstWhere((r) => r.id == 'v1').isVideo, true);
+    expect(loaded.firstWhere((r) => r.id == 'a1').isVideo, false);
+    expect(await store.count(), 2);
+    expect(await store.audioCount(), 1);
+    expect(await store.totalBytes(), greaterThan(0));
+  });
 }

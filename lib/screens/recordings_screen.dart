@@ -6,6 +6,8 @@ import '../recording_service.dart';
 import '../recordings.dart';
 import 'recording_flow.dart';
 import 'recording_player_screen.dart';
+import 'video_record_screen.dart';
+import 'paywall_screen.dart';
 
 /// All of the account's recordings, with a big record button. Opened with
 /// [piece] it shows that piece's recordings oldest first, to hear progress.
@@ -28,6 +30,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   List<Recording> _recordings = [];
   bool _loading = true;
   bool _loadFailed = false;
+  int _bytes = 0;
   late String? _pieceFilter = widget.piece;
   bool _favoritesOnly = false;
 
@@ -55,7 +58,11 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     List<Recording> list = [];
     var failed = false;
     try {
-      if (uid != null) list = await RecordingStore(uid).load();
+      if (uid != null) {
+        final store = RecordingStore(uid);
+        list = await store.load();
+        _bytes = await store.totalBytes();
+      }
     } catch (e) {
       debugPrint('Loading recordings failed: $e');
       failed = true;
@@ -78,6 +85,12 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     return list.toList();
   }
 
+  String _formatBytes(int bytes) {
+    if (bytes >= 1024 * 1024 * 1024) return '${(bytes / (1024 * 1024 * 1024)).toStringAsFixed(1)} GB';
+    if (bytes >= 1024 * 1024) return '${(bytes / (1024 * 1024)).round()} MB';
+    return '${(bytes / 1024).round()} KB';
+  }
+
   String _formatDuration(int ms) {
     final d = Duration(milliseconds: ms);
     final h = d.inHours;
@@ -93,11 +106,70 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     await RecordingStore(uid).update(r);
   }
 
+  Future<void> _openVideo() async {
+    if (RecordingService().isRecording) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stop the audio recording first, then record video.')));
+      return;
+    }
+    if (!PurchaseService().isPro) {
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: _cardBg,
+          title: const Text('Video Recording', style: TextStyle(color: Colors.white)),
+          content: const Text('Record video of your practice to check posture and technique. Video recording is part of Zyntune Pro.',
+              style: TextStyle(color: Colors.white70)),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Not Now', style: TextStyle(color: Colors.white54))),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                Navigator.push(context, MaterialPageRoute(builder: (_) => const PaywallScreen()));
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: _purple, foregroundColor: Colors.white),
+              child: const Text('Upgrade to Pro'),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => VideoRecordScreen(piece: widget.piece)));
+  }
+
+  Widget _roundButton({required IconData icon, required Color color, required String label, required VoidCallback onTap, String? badge}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Column(children: [
+        Stack(clipBehavior: Clip.none, children: [
+          Container(
+            width: 76,
+            height: 76,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color, boxShadow: [BoxShadow(color: color.withValues(alpha: 0.4), blurRadius: 18)]),
+            child: Icon(icon, color: Colors.white, size: 36),
+          ),
+          if (badge != null)
+            Positioned(
+              right: -6,
+              top: -4,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(color: Colors.amber, borderRadius: BorderRadius.circular(8)),
+                child: Text(badge, style: const TextStyle(color: Colors.black, fontSize: 9, fontWeight: FontWeight.w900)),
+              ),
+            ),
+        ]),
+        const SizedBox(height: 8),
+        Text(label, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold)),
+      ]),
+    );
+  }
+
   Widget _recordCard() {
     final service = RecordingService();
     final recording = service.isRecording;
     final isPro = PurchaseService().isPro;
-    final left = RecordingStore.freeLimit - _recordings.length;
+    final left = RecordingStore.freeLimit - _recordings.where((r) => !r.isVideo).length;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -106,35 +178,25 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         border: Border.all(color: (recording ? _recordRed : _purple).withValues(alpha: 0.4)),
       ),
       child: Column(children: [
-        GestureDetector(
-          onTap: () => recording ? stopRecording(context) : startRecording(context, piece: widget.piece),
-          child: Container(
-            width: 84,
-            height: 84,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: _recordRed,
-              boxShadow: [BoxShadow(color: _recordRed.withValues(alpha: 0.4), blurRadius: 20)],
-            ),
-            child: Icon(recording ? Icons.stop_rounded : Icons.mic, color: Colors.white, size: 40),
-          ),
-        ),
-        const SizedBox(height: 12),
-        Text(
-          recording ? 'Recording… tap to stop' : 'Tap to record',
-          style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
+        if (recording)
+          _roundButton(icon: Icons.stop_rounded, color: _recordRed, label: 'Recording… tap to stop', onTap: () => stopRecording(context))
+        else
+          Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+            _roundButton(icon: Icons.mic, color: _recordRed, label: 'Audio', onTap: () => startRecording(context, piece: widget.piece)),
+            _roundButton(icon: Icons.videocam, color: _purple, label: 'Video', onTap: _openVideo, badge: isPro ? null : 'PRO'),
+          ]),
+        const SizedBox(height: 10),
         Text(
           recording
               ? 'Keeps recording if you lock the screen or use other tools'
-              : (isPro ? 'Record a lesson or your practice' : '${left.clamp(0, RecordingStore.freeLimit)} of ${RecordingStore.freeLimit} free recordings left'),
+              : (isPro ? 'Record a lesson or your practice' : '${left.clamp(0, RecordingStore.freeLimit)} of ${RecordingStore.freeLimit} free audio recordings left'),
           textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white54, fontSize: 12),
         ),
       ]),
     );
   }
+
 
   Widget _filterChip(String label, bool selected, VoidCallback onTap) => Padding(
         padding: const EdgeInsets.only(right: 8),
@@ -170,6 +232,16 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
         children: [
           _recordCard(),
+          if (_recordings.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                'Using ${_formatBytes(_bytes)} on this iPhone'
+                '${_recordings.any((r) => r.isVideo) ? ' · Videos aren\'t included in iCloud Backup' : ''}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.white38, fontSize: 11),
+              ),
+            ),
           const SizedBox(height: 20),
           if (_recordings.isNotEmpty)
             SingleChildScrollView(
@@ -216,8 +288,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                     child: Row(children: [
                       Container(
                         padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: _recordRed.withValues(alpha: 0.15), shape: BoxShape.circle),
-                        child: const Icon(Icons.graphic_eq, color: _recordRed, size: 20),
+                        decoration: BoxDecoration(color: (r.isVideo ? _purple : _recordRed).withValues(alpha: 0.15), shape: BoxShape.circle),
+                        child: Icon(r.isVideo ? Icons.videocam : Icons.graphic_eq, color: r.isVideo ? _purple : _recordRed, size: 20),
                       ),
                       const SizedBox(width: 12),
                       Expanded(

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import 'auth_service.dart';
 import 'date_format.dart';
+import 'device_files.dart';
 import 'purchase_service.dart';
 import 'recordings.dart';
 
@@ -18,8 +19,17 @@ class PendingRecording {
   final int durationMs;
   // Piece to pre-select when saving (recording started from that piece).
   final String? piece;
+  final bool isVideo;
 
-  PendingRecording({required this.id, required this.uid, required this.path, required this.startedAt, required this.durationMs, this.piece});
+  PendingRecording({
+    required this.id,
+    required this.uid,
+    required this.path,
+    required this.startedAt,
+    required this.durationMs,
+    this.piece,
+    this.isVideo = false,
+  });
 }
 
 /// The app-wide audio recorder. One recording at a time; it keeps going while
@@ -47,7 +57,7 @@ class RecordingService extends ChangeNotifier {
     if (uid == null) return RecordingStartResult.failed;
     try {
       final store = RecordingStore(uid);
-      if (!PurchaseService().isPro && await store.count() >= RecordingStore.freeLimit) {
+      if (!PurchaseService().isPro && await store.audioCount() >= RecordingStore.freeLimit) {
         return RecordingStartResult.needsPro;
       }
       if (!await _recorder.hasPermission()) return RecordingStartResult.noPermission;
@@ -109,6 +119,7 @@ class RecordingService extends ChangeNotifier {
       fileName: pending.path.split('/').last,
       createdAt: pending.startedAt,
       durationMs: pending.durationMs,
+      isVideo: pending.isVideo,
       title: title,
       piece: piece,
       movement: movement,
@@ -116,6 +127,25 @@ class RecordingService extends ChangeNotifier {
     );
     await RecordingStore(pending.uid).add(recording);
     return recording;
+  }
+
+  /// Moves a finished camera recording into the account's recordings folder,
+  /// kept out of iCloud Backup. Returns it ready to save or discard.
+  Future<PendingRecording?> adoptVideo(String tempPath, {required DateTime startedAt, required int durationMs, String? piece}) async {
+    final uid = AuthService().currentUser?.uid;
+    if (uid == null) return null;
+    final id = startedAt.millisecondsSinceEpoch.toString();
+    final ext = tempPath.contains('.') ? tempPath.split('.').last.toLowerCase() : 'mp4';
+    final dest = await RecordingStore(uid).newFilePath(id, extension: ext);
+    try {
+      await File(tempPath).rename(dest);
+    } catch (_) {
+      // Different volume: copy instead.
+      await File(tempPath).copy(dest);
+      await File(tempPath).delete();
+    }
+    await DeviceFiles.excludeFromBackup(dest);
+    return PendingRecording(id: id, uid: uid, path: dest, startedAt: startedAt, durationMs: durationMs, piece: piece, isVideo: true);
   }
 
   Future<void> discard(PendingRecording pending) async {
@@ -130,5 +160,6 @@ class RecordingService extends ChangeNotifier {
     if (pending != null) await save(pending, title: defaultTitle(pending.startedAt));
   }
 
-  static String defaultTitle(DateTime startedAt) => 'Recording — ${formatFullDate(startedAt)}';
+  static String defaultTitle(DateTime startedAt, {bool video = false}) =>
+      '${video ? 'Video' : 'Recording'} — ${formatFullDate(startedAt)}';
 }

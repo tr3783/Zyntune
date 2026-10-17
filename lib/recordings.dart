@@ -21,6 +21,8 @@ class Recording {
   final String fileName;
   final DateTime createdAt;
   final int durationMs;
+  /// Video recordings are Pro-only, stored on the device but not in iCloud Backup.
+  final bool isVideo;
   String title;
   String piece;
   String movement;
@@ -34,6 +36,7 @@ class Recording {
     required this.createdAt,
     required this.durationMs,
     required this.title,
+    this.isVideo = false,
     this.piece = '',
     this.movement = '',
     this.notes = '',
@@ -49,6 +52,7 @@ class Recording {
         'fileName': fileName,
         'createdAt': createdAt.toIso8601String(),
         'durationMs': durationMs,
+        if (isVideo) 'isVideo': true,
         'title': title,
         'piece': piece,
         'movement': movement,
@@ -63,6 +67,7 @@ class Recording {
         createdAt: DateTime.tryParse(json['createdAt'] as String? ?? '') ?? DateTime.now(),
         durationMs: (json['durationMs'] as num?)?.toInt() ?? 0,
         title: json['title'] as String? ?? 'Recording',
+        isVideo: json['isVideo'] as bool? ?? false,
         piece: json['piece'] as String? ?? '',
         movement: json['movement'] as String? ?? '',
         notes: json['notes'] as String? ?? '',
@@ -130,9 +135,22 @@ class RecordingStore {
   Future<String> pathFor(Recording r) async => '${(await folder()).path}/${r.fileName}';
 
   /// A new file path to record into.
-  Future<String> newFilePath(String id) async => '${(await folder()).path}/$id.m4a';
+  Future<String> newFilePath(String id, {String extension = 'm4a'}) async => '${(await folder()).path}/$id.$extension';
 
   Future<int> count() async => (await load()).length;
+
+  /// Audio recordings count toward the free limit; video is Pro-only.
+  Future<int> audioCount() async => (await load()).where((r) => !r.isVideo).length;
+
+  /// Total size of this account's recordings on the device, in bytes.
+  Future<int> totalBytes() async {
+    var total = 0;
+    final dir = await folder();
+    await for (final entity in dir.list()) {
+      if (entity is File) total += await entity.length();
+    }
+    return total;
+  }
 
   Future<void> add(Recording recording) async {
     final all = await load();

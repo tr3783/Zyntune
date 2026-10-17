@@ -94,12 +94,15 @@ Future<void> startRecording(BuildContext context, {String? piece}) async {
 Future<void> stopRecording(BuildContext context) async {
   final pending = await RecordingService().stop();
   if (pending == null || !context.mounted) return;
-  await showDialog(
-    context: context,
-    barrierDismissible: false,
-    builder: (_) => _SaveRecordingDialog(pending: pending),
-  );
+  await showSaveRecordingDialog(context, pending);
 }
+
+/// Ask the user to name and save a finished recording (audio or video).
+Future<void> showSaveRecordingDialog(BuildContext context, PendingRecording pending) => showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => _SaveRecordingDialog(pending: pending),
+    );
 
 class _PieceOption {
   final String title;
@@ -140,7 +143,7 @@ class _SaveRecordingDialog extends StatefulWidget {
 
 class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
   late final TextEditingController _title = TextEditingController(
-      text: RecordingService.defaultTitle(widget.pending.startedAt));
+      text: RecordingService.defaultTitle(widget.pending.startedAt, video: widget.pending.isVideo));
   final _notes = TextEditingController();
   bool _titleEdited = false;
   List<_PieceOption> _pieces = [];
@@ -155,8 +158,9 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
       if (!mounted) return;
       setState(() => _pieces = p);
       final piece = widget.pending.piece;
-      if (piece != null && p.any((o) => o.title == piece))
+      if (piece != null && p.any((o) => o.title == piece)) {
         _selectPiece(piece, '');
+      }
     });
   }
 
@@ -174,7 +178,7 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
       // Name it after the piece unless the user typed their own name.
       if (!_titleEdited) {
         _title.text = piece.isEmpty
-            ? RecordingService.defaultTitle(widget.pending.startedAt)
+            ? RecordingService.defaultTitle(widget.pending.startedAt, video: widget.pending.isVideo)
             : (movement.isEmpty ? piece : '$piece · $movement');
       }
     });
@@ -183,7 +187,7 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
   Future<void> _save() async {
     setState(() => _saving = true);
     final title = _title.text.trim().isEmpty
-        ? RecordingService.defaultTitle(widget.pending.startedAt)
+        ? RecordingService.defaultTitle(widget.pending.startedAt, video: widget.pending.isVideo)
         : _title.text.trim();
     await RecordingService().save(widget.pending,
         title: title,
@@ -202,10 +206,10 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardBg,
-        title: const Text('Discard Recording?',
-            style: TextStyle(color: Colors.white)),
-        content: const Text('This recording will be deleted.',
-            style: TextStyle(color: Colors.white70)),
+        title: Text(widget.pending.isVideo ? 'Discard Video?' : 'Discard Recording?',
+            style: const TextStyle(color: Colors.white)),
+        content: Text('This ${widget.pending.isVideo ? 'video' : 'recording'} will be deleted.',
+            style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),
@@ -269,7 +273,7 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
     return AlertDialog(
       backgroundColor: _cardBg,
       title: Text(
-          '🎙 Save Recording ($minutes:${seconds.toString().padLeft(2, '0')})',
+          '${widget.pending.isVideo ? '🎥 Save Video' : '🎙 Save Recording'} ($minutes:${seconds.toString().padLeft(2, '0')})',
           style: const TextStyle(color: Colors.white, fontSize: 18)),
       content: SingleChildScrollView(
         child: Column(

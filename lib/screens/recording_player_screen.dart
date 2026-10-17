@@ -1,15 +1,14 @@
-import 'dart:async';
 import 'dart:io';
-import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 import '../auth_service.dart';
 import '../date_format.dart';
 import '../recordings.dart';
+import 'recording_playback.dart';
 
-/// Plays a recording, with practice tools: slow down (pitch kept), loop a
-/// section, markers with notes, favorite, share, edit and delete.
+/// Plays an audio or video recording, with practice tools: slow down (pitch
+/// kept), loop a section, markers with notes, favorite, share, edit, delete.
 class RecordingPlayerScreen extends StatefulWidget {
   final Recording recording;
   const RecordingPlayerScreen({super.key, required this.recording});
@@ -26,9 +25,8 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
   static const _pink = Color(0xFFE91E8C);
   static const _teal = Color(0xFF00BFA5);
 
-  final _player = AudioPlayer();
-  final List<StreamSubscription> _subs = [];
   late final Recording _r = widget.recording;
+  late final RecordingPlayback _player = RecordingPlayback(isVideo: _r.isVideo);
   String? _path;
   Duration _position = Duration.zero;
   Duration _duration = Duration.zero;
@@ -47,16 +45,17 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
   void initState() {
     super.initState();
     _duration = Duration(milliseconds: _r.durationMs);
-    _subs.add(_player.onPositionChanged.listen(_onPosition));
-    _subs.add(_player.onDurationChanged.listen((d) {
-      if (mounted && d > Duration.zero) setState(() => _duration = d);
-    }));
-    _subs.add(_player.onPlayerStateChanged.listen((s) {
-      if (mounted) setState(() => _playing = s == PlayerState.playing);
-    }));
-    _subs.add(_player.onPlayerComplete.listen((_) {
-      if (mounted) setState(() => _position = Duration.zero);
-    }));
+    _player
+      ..onPosition = _onPosition
+      ..onDuration = (d) {
+        if (mounted && d > Duration.zero) setState(() => _duration = d);
+      }
+      ..onPlayingChanged = (playing) {
+        if (mounted) setState(() => _playing = playing);
+      }
+      ..onComplete = () {
+        if (mounted) setState(() => _position = Duration.zero);
+      };
     _prepare();
   }
 
@@ -64,8 +63,7 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
     final store = _store;
     if (store == null) return;
     final path = await store.pathFor(_r);
-    await _player.setReleaseMode(ReleaseMode.stop);
-    await _player.setSource(DeviceFileSource(path));
+    await _player.open(path);
     if (mounted) setState(() => _path = path);
   }
 
@@ -80,9 +78,6 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
 
   @override
   void dispose() {
-    for (final s in _subs) {
-      s.cancel();
-    }
     _player.dispose();
     super.dispose();
   }
@@ -92,8 +87,7 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
     if (_playing) {
       await _player.pause();
     } else {
-      await _player.resume();
-      await _player.setPlaybackRate(_speed);
+      await _player.play(_speed);
     }
   }
 
@@ -105,7 +99,7 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
 
   Future<void> _setSpeed(double speed) async {
     setState(() => _speed = speed);
-    await _player.setPlaybackRate(speed);
+    await _player.setSpeed(speed);
   }
 
   Future<void> _saveChanges() async => _store?.update(_r);
@@ -188,8 +182,10 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
     // Share with a readable file name instead of the internal one.
     final safeName = _r.title.replaceAll(RegExp(r'[^\w\s\-·]'), '').trim();
     final tmp = await getTemporaryDirectory();
-    final copy = await File(_path!).copy('${tmp.path}/${safeName.isEmpty ? 'Recording' : safeName}.m4a');
-    await SharePlus.instance.share(ShareParams(files: [XFile(copy.path, mimeType: 'audio/mp4')], subject: _r.title));
+    final ext = _path!.split('.').last;
+    final copy = await File(_path!).copy('${tmp.path}/${safeName.isEmpty ? 'Recording' : safeName}.$ext');
+    final mime = _r.isVideo ? (ext == 'mov' ? 'video/quicktime' : 'video/mp4') : 'audio/mp4';
+    await SharePlus.instance.share(ShareParams(files: [XFile(copy.path, mimeType: mime)], subject: _r.title));
   }
 
   Future<void> _delete() async {
@@ -251,7 +247,7 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
     return Scaffold(
       backgroundColor: _darkBg,
       appBar: AppBar(
-        title: const Text('Recording', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
+        title: Text(_r.isVideo ? 'Video' : 'Recording', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white),
@@ -275,6 +271,14 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
         children: [
+          // Video
+          if (_r.isVideo) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Container(color: Colors.black, alignment: Alignment.center, constraints: const BoxConstraints(maxHeight: 420), child: _player.view()),
+            ),
+            const SizedBox(height: 16),
+          ],
           // Title
           Text(_r.title, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
           if (_r.piece.isNotEmpty && _r.pieceLabel != _r.title) Text(_r.pieceLabel, style: const TextStyle(color: _pink, fontSize: 14, fontWeight: FontWeight.w600)),

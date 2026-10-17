@@ -28,6 +28,8 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Zyntune uses the camera to record video of your practice when you choose to. Videos stay on your iPhone.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Zyntune uses the microphone for the tuner and to record your practice and lessons when you choose to.</string>
 	<key>UIApplicationSupportsIndirectInputEvents</key>

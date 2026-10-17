@@ -88,6 +88,42 @@ import StoreKit
             }
         }
 
+        // --- Device Channel (video recordings) ---
+        let deviceRegistrar = engineBridge.pluginRegistry.registrar(forPlugin: "DevicePlugin")!
+        let deviceChannel = FlutterMethodChannel(
+            name: "com.topher.zyntune/device",
+            binaryMessenger: deviceRegistrar.messenger()
+        )
+        deviceChannel.setMethodCallHandler { call, result in
+            switch call.method {
+            case "excludeFromBackup":
+                // Videos are large; keep them out of the user's iCloud Backup.
+                guard let path = call.arguments as? String else {
+                    result(FlutterError(code: "INVALID_ARGS", message: "Expected a file path", details: nil))
+                    return
+                }
+                var url = URL(fileURLWithPath: path)
+                var values = URLResourceValues()
+                values.isExcludedFromBackup = true
+                do {
+                    try url.setResourceValues(values)
+                    result(true)
+                } catch {
+                    result(FlutterError(code: "EXCLUDE_FAILED", message: error.localizedDescription, details: nil))
+                }
+            case "freeDiskSpace":
+                let home = URL(fileURLWithPath: NSHomeDirectory())
+                let values = try? home.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+                result(values?.volumeAvailableCapacityForImportantUsage.map { NSNumber(value: $0) })
+            case "setKeepScreenOn":
+                // Video can't record with the screen locked, so keep it awake.
+                UIApplication.shared.isIdleTimerDisabled = (call.arguments as? Bool) ?? false
+                result(nil)
+            default:
+                result(FlutterMethodNotImplemented)
+            }
+        }
+
         // --- StoreKit Channel ---
         // Asks Apple which build the user first downloaded (for grandfathering)
         // and which purchases are currently active (so lapsed subscriptions end).
