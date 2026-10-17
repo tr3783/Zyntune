@@ -27,6 +27,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
 
   List<Recording> _recordings = [];
   bool _loading = true;
+  bool _loadFailed = false;
   late String? _pieceFilter = widget.piece;
   bool _favoritesOnly = false;
 
@@ -51,11 +52,19 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
 
   Future<void> _load() async {
     final uid = AuthService().currentUser?.uid;
-    final list = uid == null ? <Recording>[] : await RecordingStore(uid).load();
+    List<Recording> list = [];
+    var failed = false;
+    try {
+      if (uid != null) list = await RecordingStore(uid).load();
+    } catch (e) {
+      debugPrint('Loading recordings failed: $e');
+      failed = true;
+    }
     if (mounted) {
       setState(() {
         _recordings = list;
         _loading = false;
+        _loadFailed = failed;
       });
     }
   }
@@ -179,6 +188,11 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
           const SizedBox(height: 12),
           if (_loading)
             const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: _purple)))
+          else if (_loadFailed)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Text('Couldn\'t open your recordings. Please close and reopen Zyntune.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
+            )
           else if (visible.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),

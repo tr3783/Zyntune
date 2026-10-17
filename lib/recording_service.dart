@@ -41,12 +41,12 @@ class RecordingService extends ChangeNotifier {
     if (isRecording) return RecordingStartResult.alreadyRecording;
     final uid = AuthService().currentUser?.uid;
     if (uid == null) return RecordingStartResult.failed;
-    final store = RecordingStore(uid);
-    if (!PurchaseService().isPro && await store.count() >= RecordingStore.freeLimit) {
-      return RecordingStartResult.needsPro;
-    }
-    if (!await _recorder.hasPermission()) return RecordingStartResult.noPermission;
     try {
+      final store = RecordingStore(uid);
+      if (!PurchaseService().isPro && await store.count() >= RecordingStore.freeLimit) {
+        return RecordingStartResult.needsPro;
+      }
+      if (!await _recorder.hasPermission()) return RecordingStartResult.noPermission;
       final id = DateTime.now().millisecondsSinceEpoch.toString();
       final path = await store.newFilePath(id);
       // AAC, mono, ~1 MB per minute. The default iOS options play through the
