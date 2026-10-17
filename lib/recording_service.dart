@@ -55,6 +55,14 @@ class RecordingService extends ChangeNotifier {
   String? _path;
   DateTime? _startedAt;
   String? _piece;
+  Timer? _meterTimer;
+  // Files being recorded or waiting in a Save dialog; recovery skips them.
+  final Set<String> _inUse = {};
+  Set<String> get filesInUse => Set.unmodifiable(_inUse);
+
+  /// Microphone level while recording, 0 (silent) to 1 (loud), for the meter.
+  /// Separate from notifyListeners so the whole app doesn't rebuild 8×/sec.
+  final ValueNotifier<double> level = ValueNotifier(0);
 
   bool get isRecording => _startedAt != null;
   Duration get elapsed => _startedAt == null ? Duration.zero : DateTime.now().difference(_startedAt!);
@@ -90,13 +98,24 @@ class RecordingService extends ChangeNotifier {
       _path = path;
       _startedAt = DateTime.now();
       _piece = piece;
+      _inUse.add(path);
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) => notifyListeners());
+      _meterTimer = Timer.periodic(const Duration(milliseconds: 120), (_) => _updateLevel());
       notifyListeners();
       return RecordingStartResult.started;
     } catch (e) {
       debugPrint('RecordingService start failed: $e');
       return RecordingStartResult.failed;
     }
+  }
+
+  Future<void> _updateLevel() async {
+    try {
+      final amp = await _recorder.getAmplitude();
+      if (!isRecording) return;
+      // dBFS: about -50 is quiet room noise, 0 is the loudest possible.
+      level.value = ((amp.current + 50) / 50).clamp(0.0, 1.0);
+    } catch (_) {}
   }
 
   /// A phone call or another app took the microphone: stop and keep what was
@@ -121,6 +140,9 @@ class RecordingService extends ChangeNotifier {
     final pending = (id: _id!, uid: _uid!, path: _path!, piece: _piece);
     _ticker?.cancel();
     _ticker = null;
+    _meterTimer?.cancel();
+    _meterTimer = null;
+    level.value = 0;
     _startedAt = null;
     _id = null;
     _uid = null;
@@ -132,7 +154,10 @@ class RecordingService extends ChangeNotifier {
     } catch (e) {
       debugPrint('RecordingService stop failed: $e');
     }
-    if (!await File(pending.path).exists()) return null;
+    if (!await File(pending.path).exists()) {
+      _inUse.remove(pending.path);
+      return null;
+    }
     return PendingRecording(
       id: pending.id,
       uid: pending.uid,
@@ -157,6 +182,7 @@ class RecordingService extends ChangeNotifier {
       notes: notes,
     );
     await RecordingStore(pending.uid).add(recording);
+    _inUse.remove(pending.path);
     return recording;
   }
 
@@ -175,11 +201,13 @@ class RecordingService extends ChangeNotifier {
       await File(tempPath).copy(dest);
       await File(tempPath).delete();
     }
+    _inUse.add(dest);
     await DeviceFiles.excludeFromBackup(dest);
     return PendingRecording(id: id, uid: uid, path: dest, startedAt: startedAt, durationMs: durationMs, piece: piece, isVideo: true);
   }
 
   Future<void> discard(PendingRecording pending) async {
+    _inUse.remove(pending.path);
     final file = File(pending.path);
     if (await file.exists()) await file.delete();
   }

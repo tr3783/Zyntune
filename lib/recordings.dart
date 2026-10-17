@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
+import 'date_format.dart';
 
 /// A moment in a recording with a note, e.g. "12:40 — relax the wrist".
 class RecordingMarker {
@@ -177,10 +178,128 @@ class RecordingStore {
     changes.value++;
   }
 
+  /// Finds recording files that never made it into the list (the app was
+  /// closed before Save was tapped) and adds them with a default name.
+  /// Files that can't be played (the app was closed mid-recording, so iOS
+  /// never finished writing them) are deleted to free the space.
+  /// [inUse]: files being recorded or waiting in a Save dialog right now.
+  /// Returns how many recordings were recovered.
+  Future<int> recoverUnsaved({Set<String> inUse = const {}}) async {
+    final dir = await folder();
+    final all = await load();
+    final known = all.map((r) => r.fileName).toSet();
+    final recovered = <Recording>[];
+    await for (final entity in dir.list()) {
+      if (entity is! File) continue;
+      final name = entity.path.split('/').last;
+      final dot = name.lastIndexOf('.');
+      if (dot <= 0) continue;
+      final ext = name.substring(dot + 1).toLowerCase();
+      if (!const {'m4a', 'mov', 'mp4'}.contains(ext)) continue;
+      if (known.contains(name) || inUse.contains(entity.path)) continue;
+      final durationMs = await Mp4Duration.read(entity.path);
+      if (durationMs == null || durationMs <= 0) {
+        try {
+          await entity.delete();
+        } catch (_) {}
+        continue;
+      }
+      final id = name.substring(0, dot);
+      final ms = int.tryParse(id);
+      final createdAt = ms != null ? DateTime.fromMillisecondsSinceEpoch(ms) : await entity.lastModified();
+      final isVideo = ext != 'm4a';
+      recovered.add(Recording(
+        id: id,
+        fileName: name,
+        createdAt: createdAt,
+        durationMs: durationMs,
+        isVideo: isVideo,
+        title: '${isVideo ? 'Video' : 'Recording'} — ${formatFullDate(createdAt)} (recovered)',
+      ));
+    }
+    if (recovered.isEmpty) return 0;
+    await _save([...all, ...recovered]);
+    changes.value++;
+    return recovered.length;
+  }
+
   /// Account deletion: remove every recording for this account.
   Future<void> deleteAll() async {
     final dir = await folder();
     if (await dir.exists()) await dir.delete(recursive: true);
     changes.value++;
+  }
+}
+
+/// Reads the length of an .m4a/.mov/.mp4 file from its header. Returns null
+/// if the file isn't finished (no 'moov' box), e.g. the app was closed while
+/// recording.
+class Mp4Duration {
+  static Future<int?> read(String path) async {
+    RandomAccessFile? raf;
+    try {
+      raf = await File(path).open();
+      final length = await raf.length();
+      var offset = 0;
+      (int, int)? moov;
+      while (offset + 8 <= length) {
+        final header = await _readAt(raf, offset, 16);
+        if (header.length < 8) return null;
+        final data = ByteData.sublistView(header);
+        var size = data.getUint32(0);
+        final type = String.fromCharCodes(header.sublist(4, 8));
+        var headerSize = 8;
+        if (size == 1) {
+          if (header.length < 16) return null;
+          size = data.getUint64(8);
+          headerSize = 16;
+        } else if (size == 0) {
+          size = length - offset;
+        }
+        // A box running past the end of the file: the file was cut short.
+        if (size < headerSize || offset + size > length) return null;
+        if (type == 'moov') moov = (offset + headerSize, offset + size);
+        offset += size;
+      }
+      if (moov == null) return null;
+      return await _durationInMoov(raf, moov.$1, moov.$2);
+    } catch (_) {
+      return null;
+    } finally {
+      await raf?.close();
+    }
+  }
+
+  static Future<int?> _durationInMoov(RandomAccessFile raf, int start, int end) async {
+    var offset = start;
+    while (offset + 8 <= end) {
+      final header = await _readAt(raf, offset, 8);
+      if (header.length < 8) return null;
+      final size = ByteData.sublistView(header).getUint32(0);
+      if (size < 8) return null;
+      if (String.fromCharCodes(header.sublist(4, 8)) == 'mvhd') {
+        final body = await _readAt(raf, offset + 8, 32);
+        final data = ByteData.sublistView(body);
+        final version = body[0];
+        final int timescale;
+        final int duration;
+        if (version == 1) {
+          timescale = data.getUint32(20);
+          duration = data.getUint64(24);
+        } else {
+          timescale = data.getUint32(12);
+          duration = data.getUint32(16);
+        }
+        if (timescale == 0) return null;
+        return duration * 1000 ~/ timescale;
+      }
+      offset += size;
+    }
+    return null;
+  }
+
+  static Future<Uint8List> _readAt(RandomAccessFile raf, int offset, int count) async {
+    await raf.setPosition(offset);
+    return raf.read(count);
   }
 }

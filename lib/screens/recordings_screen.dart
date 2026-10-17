@@ -53,13 +53,24 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     if (mounted) setState(() {});
   }
 
+  // Accounts already checked for unsaved recordings since the app started.
+  static final Set<String> _recoveryChecked = {};
+
   Future<void> _load() async {
     final uid = AuthService().currentUser?.uid;
     List<Recording> list = [];
     var failed = false;
+    var recovered = 0;
     try {
       if (uid != null) {
         final store = RecordingStore(uid);
+        if (_recoveryChecked.add(uid)) {
+          try {
+            recovered = await store.recoverUnsaved(inUse: RecordingService().filesInUse);
+          } catch (e) {
+            debugPrint('Recovering recordings failed: $e');
+          }
+        }
         list = await store.load();
         _bytes = await store.totalBytes();
       }
@@ -73,6 +84,13 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         _loading = false;
         _loadFailed = failed;
       });
+    }
+    if (recovered > 0 && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(recovered == 1
+            ? 'Found 1 recording that wasn\'t saved — it\'s been added to your list.'
+            : 'Found $recovered recordings that weren\'t saved — they\'ve been added to your list.'),
+      ));
     }
   }
 

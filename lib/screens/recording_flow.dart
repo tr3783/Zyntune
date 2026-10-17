@@ -384,6 +384,8 @@ class RecordingBar extends StatelessWidget {
                     const Icon(Icons.fiber_manual_record,
                         color: Colors.white, size: 14),
                     const SizedBox(width: 8),
+                    const _LevelMeter(),
+                    const SizedBox(width: 8),
                     Text('Recording ${_format(service.elapsed)}',
                         style: const TextStyle(
                             color: Colors.white,
@@ -409,6 +411,42 @@ class RecordingBar extends StatelessWidget {
           ),
         );
       },
+    );
+  }
+}
+
+/// Five little bars that move with the microphone level, so you can see
+/// Zyntune is hearing you.
+class _LevelMeter extends StatelessWidget {
+  const _LevelMeter();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<double>(
+      valueListenable: RecordingService().level,
+      builder: (context, level, _) => Semantics(
+        label: 'Microphone level',
+        child: SizedBox(
+          height: 16,
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(5, (i) {
+              final lit = level > i / 5;
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 100),
+                width: 3,
+                height: 4.0 + i * 3,
+                margin: const EdgeInsets.only(right: 2),
+                decoration: BoxDecoration(
+                  color: lit ? Colors.white : Colors.white30,
+                  borderRadius: BorderRadius.circular(1.5),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
     );
   }
 }
