@@ -16,8 +16,10 @@ class PendingRecording {
   final String path;
   final DateTime startedAt;
   final int durationMs;
+  // Piece to pre-select when saving (recording started from that piece).
+  final String? piece;
 
-  PendingRecording({required this.id, required this.uid, required this.path, required this.startedAt, required this.durationMs});
+  PendingRecording({required this.id, required this.uid, required this.path, required this.startedAt, required this.durationMs, this.piece});
 }
 
 /// The app-wide audio recorder. One recording at a time; it keeps going while
@@ -33,11 +35,13 @@ class RecordingService extends ChangeNotifier {
   String? _uid;
   String? _path;
   DateTime? _startedAt;
+  String? _piece;
 
   bool get isRecording => _startedAt != null;
   Duration get elapsed => _startedAt == null ? Duration.zero : DateTime.now().difference(_startedAt!);
 
-  Future<RecordingStartResult> start() async {
+  /// [piece]: the piece being recorded, if started from that piece's page.
+  Future<RecordingStartResult> start({String? piece}) async {
     if (isRecording) return RecordingStartResult.alreadyRecording;
     final uid = AuthService().currentUser?.uid;
     if (uid == null) return RecordingStartResult.failed;
@@ -59,6 +63,7 @@ class RecordingService extends ChangeNotifier {
       _uid = uid;
       _path = path;
       _startedAt = DateTime.now();
+      _piece = piece;
       _ticker = Timer.periodic(const Duration(seconds: 1), (_) => notifyListeners());
       notifyListeners();
       return RecordingStartResult.started;
@@ -73,13 +78,14 @@ class RecordingService extends ChangeNotifier {
   Future<PendingRecording?> stop() async {
     if (!isRecording) return null;
     final startedAt = _startedAt!;
-    final pending = (id: _id!, uid: _uid!, path: _path!);
+    final pending = (id: _id!, uid: _uid!, path: _path!, piece: _piece);
     _ticker?.cancel();
     _ticker = null;
     _startedAt = null;
     _id = null;
     _uid = null;
     _path = null;
+    _piece = null;
     notifyListeners();
     try {
       await _recorder.stop();
@@ -93,6 +99,7 @@ class RecordingService extends ChangeNotifier {
       path: pending.path,
       startedAt: startedAt,
       durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+      piece: pending.piece,
     );
   }
 

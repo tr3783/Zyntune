@@ -107,7 +107,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
       ),
       child: Column(children: [
         GestureDetector(
-          onTap: () => recording ? stopRecording(context) : startRecording(context),
+          onTap: () => recording ? stopRecording(context) : startRecording(context, piece: widget.piece),
           child: Container(
             width: 84,
             height: 84,
@@ -223,7 +223,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                       Expanded(
                         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                           Text(r.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          if (r.piece.isNotEmpty)
+                          if (r.piece.isNotEmpty && r.pieceLabel != r.title)
                             Text(r.pieceLabel, style: const TextStyle(color: _pink, fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
                           Text('${formatFullDate(r.createdAt)} · ${_formatDuration(r.durationMs)}${r.markers.isNotEmpty ? ' · ${r.markers.length} marker${r.markers.length == 1 ? '' : 's'}' : ''}',
                               style: const TextStyle(color: Colors.white54, fontSize: 12)),

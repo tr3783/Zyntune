@@ -277,7 +277,7 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
         children: [
           // Title
           Text(_r.title, style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold)),
-          if (_r.piece.isNotEmpty) Text(_r.pieceLabel, style: const TextStyle(color: _pink, fontSize: 14, fontWeight: FontWeight.w600)),
+          if (_r.piece.isNotEmpty && _r.pieceLabel != _r.title) Text(_r.pieceLabel, style: const TextStyle(color: _pink, fontSize: 14, fontWeight: FontWeight.w600)),
           Text(formatFullDate(_r.createdAt), style: const TextStyle(color: Colors.white54, fontSize: 13)),
           if (_r.notes.isNotEmpty) ...[
             const SizedBox(height: 8),

@@ -14,8 +14,8 @@ const _recordRed = Color(0xFFE53935);
 
 /// Start recording from anywhere (Recordings screen, timer). Handles the
 /// free-tier limit and microphone permission.
-Future<void> startRecording(BuildContext context) async {
-  final result = await RecordingService().start();
+Future<void> startRecording(BuildContext context, {String? piece}) async {
+  final result = await RecordingService().start(piece: piece);
   if (!context.mounted) return;
   switch (result) {
     case RecordingStartResult.started:
@@ -152,7 +152,11 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
   void initState() {
     super.initState();
     _loadPieces().then((p) {
-      if (mounted) setState(() => _pieces = p);
+      if (!mounted) return;
+      setState(() => _pieces = p);
+      final piece = widget.pending.piece;
+      if (piece != null && p.any((o) => o.title == piece))
+        _selectPiece(piece, '');
     });
   }
 
@@ -352,8 +356,10 @@ class RecordingBar extends StatelessWidget {
       builder: (context, _) {
         final service = RecordingService();
         if (!service.isRecording) return const SizedBox.shrink();
-        return ColoredBox(
+        return Container(
+          width: double.infinity,
           color: const Color(0xFF0D0D1A),
+          alignment: Alignment.center,
           child: SafeArea(
             top: false,
             child: Padding(
