@@ -20,6 +20,8 @@ class PendingRecording {
   // Piece to pre-select when saving (recording started from that piece).
   final String? piece;
   final bool isVideo;
+  // Stopped by a phone call or another app taking the microphone.
+  final bool interrupted;
 
   PendingRecording({
     required this.id,
@@ -29,6 +31,7 @@ class PendingRecording {
     required this.durationMs,
     this.piece,
     this.isVideo = false,
+    this.interrupted = false,
   });
 }
 
@@ -37,7 +40,13 @@ class PendingRecording {
 class RecordingService extends ChangeNotifier {
   static final RecordingService _instance = RecordingService._internal();
   factory RecordingService() => _instance;
-  RecordingService._internal();
+  RecordingService._internal() {
+    DeviceFiles.onAudioInterrupted(_onInterrupted);
+  }
+
+  /// Shows the save dialog for a recording stopped by an interruption
+  /// (set up in main.dart).
+  void Function(PendingRecording pending)? onStoppedByInterruption;
 
   final AudioRecorder _recorder = AudioRecorder();
   Timer? _ticker;
@@ -66,7 +75,14 @@ class RecordingService extends ChangeNotifier {
       // AAC, mono, ~1 MB per minute. The default iOS options play through the
       // speaker, so the metronome stays audible while recording.
       await _recorder.start(
-        const RecordConfig(encoder: AudioEncoder.aacLc, bitRate: 128000, sampleRate: 44100, numChannels: 1),
+        // Interruptions (phone calls) are handled in _onInterrupted.
+        const RecordConfig(
+          encoder: AudioEncoder.aacLc,
+          bitRate: 128000,
+          sampleRate: 44100,
+          numChannels: 1,
+          audioInterruption: AudioInterruptionMode.none,
+        ),
         path: path,
       );
       _id = id;
@@ -83,9 +99,23 @@ class RecordingService extends ChangeNotifier {
     }
   }
 
+  /// A phone call or another app took the microphone: stop and keep what was
+  /// recorded, rather than leaving the bar saying "Recording" over silence.
+  Future<void> _onInterrupted() async {
+    if (!isRecording) return;
+    final pending = await stop(interrupted: true);
+    if (pending == null) return;
+    final show = onStoppedByInterruption;
+    if (show != null) {
+      show(pending);
+    } else {
+      await save(pending, title: defaultTitle(pending.startedAt));
+    }
+  }
+
   /// Stops recording. Returns the recording to save or discard, or null if
   /// nothing was recorded.
-  Future<PendingRecording?> stop() async {
+  Future<PendingRecording?> stop({bool interrupted = false}) async {
     if (!isRecording) return null;
     final startedAt = _startedAt!;
     final pending = (id: _id!, uid: _uid!, path: _path!, piece: _piece);
@@ -110,6 +140,7 @@ class RecordingService extends ChangeNotifier {
       startedAt: startedAt,
       durationMs: DateTime.now().difference(startedAt).inMilliseconds,
       piece: pending.piece,
+      interrupted: interrupted,
     );
   }
 

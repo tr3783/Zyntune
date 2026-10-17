@@ -1,11 +1,13 @@
 import Flutter
 import UIKit
 import StoreKit
+import AVFoundation
 
 @main
 @objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     let metronome = MetronomeEngine()
     var icloudChannel: FlutterMethodChannel?
+    var deviceChannel: FlutterMethodChannel?
 
     override func application(
         _ application: UIApplication,
@@ -94,6 +96,15 @@ import StoreKit
             name: "com.topher.zyntune/device",
             binaryMessenger: deviceRegistrar.messenger()
         )
+        self.deviceChannel = deviceChannel
+        // A phone call (or another app) taking the microphone: tell Dart so an
+        // audio recording can be stopped and kept, instead of silently pausing.
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(onAudioInterruption(_:)),
+            name: AVAudioSession.interruptionNotification,
+            object: AVAudioSession.sharedInstance()
+        )
         deviceChannel.setMethodCallHandler { call, result in
             switch call.method {
             case "excludeFromBackup":
@@ -167,6 +178,18 @@ import StoreKit
             default:
                 result(FlutterMethodNotImplemented)
             }
+        }
+    }
+
+    @objc func onAudioInterruption(_ notification: Notification) {
+        guard let info = notification.userInfo,
+              let typeValue = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: typeValue) == .began else { return }
+        // Delivered late after the app was suspended: nothing was recording.
+        if let reasonValue = info[AVAudioSessionInterruptionReasonKey] as? UInt,
+           AVAudioSession.InterruptionReason(rawValue: reasonValue) == .appWasSuspended { return }
+        DispatchQueue.main.async {
+            self.deviceChannel?.invokeMethod("audioInterrupted", arguments: nil)
         }
     }
 }

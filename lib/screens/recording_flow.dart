@@ -280,6 +280,12 @@ class _SaveRecordingDialogState extends State<_SaveRecordingDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (widget.pending.interrupted) ...[
+                const Text(
+                    'Recording stopped because a call or another app needed the microphone. Everything up to then was kept.',
+                    style: TextStyle(color: Colors.white70, fontSize: 13)),
+                const SizedBox(height: 12),
+              ],
               TextField(
                 controller: _title,
                 style: const TextStyle(color: Colors.white),

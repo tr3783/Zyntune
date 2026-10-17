@@ -63,6 +63,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                 const SizedBox(height: 32),
 
                 // --- Features ---
+                const _FeatureRow(emoji: '🎥', title: 'Video Recording', subtitle: 'Record video to check posture and technique'),
+                const SizedBox(height: 12),
+                const _FeatureRow(emoji: '🎙', title: 'Unlimited Recordings', subtitle: 'Record as many lessons and practice sessions as you like'),
+                const SizedBox(height: 12),
                 const _FeatureRow(emoji: '🎵', title: 'Metronome Subdivisions', subtitle: 'Eighth, Triplet and Sixteenth note subdivisions'),
                 const SizedBox(height: 12),
                 const _FeatureRow(emoji: '🧊', title: 'Streak Freeze', subtitle: 'Protect your streak on a missed day'),

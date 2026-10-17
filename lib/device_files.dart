@@ -24,6 +24,13 @@ class DeviceFiles {
     }
   }
 
+  /// Called when a phone call or another app takes over the microphone.
+  static void onAudioInterrupted(VoidCallback callback) {
+    _channel.setMethodCallHandler((call) async {
+      if (call.method == 'audioInterrupted') callback();
+    });
+  }
+
   /// Keep the screen from locking (while recording video).
   static Future<void> setKeepScreenOn(bool on) async {
     try {

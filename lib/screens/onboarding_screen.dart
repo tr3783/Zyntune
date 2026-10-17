@@ -291,6 +291,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             const Text('Zyntune Pro includes:', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
             const SizedBox(height: 14),
+            _buildProFeatureRow('🎥', 'Video recording to check posture and technique'),
+            _buildProFeatureRow('🎙', 'Unlimited audio recordings'),
             _buildProFeatureRow('🎵', 'Metronome subdivisions (Eighth, Triplet, Sixteenth)'),
             _buildProFeatureRow('🧊', 'Streak freeze — protect your streak on a missed day'),
             _buildProFeatureRow('📅', 'Practice calendar with events and deadlines'),

@@ -141,7 +141,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _maybeShowWhatsNew() async {
     final prefs = await SharedPreferences.getInstance();
-    const currentVersion = '2.5.1';
+    const currentVersion = '2.6.0';
     final lastSeenVersion = prefs.getString('lastWhatsNewVersion') ?? '';
     if (lastSeenVersion == currentVersion) return;
     await prefs.setString('lastWhatsNewVersion', currentVersion);
@@ -155,6 +155,7 @@ class _HomeScreenState extends State<HomeScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: const Color(0xFF1A0A4E),
+        scrollable: true,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
         title: const Column(children: [
           Text('🎉', style: TextStyle(fontSize: 36)),
@@ -164,18 +165,29 @@ class _HomeScreenState extends State<HomeScreen> {
                 content: const Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Divider(color: Colors.white12),
           SizedBox(height: 12),
-          _WhatsNewRow(emoji: '☁️', text: 'Everything backs up to your account — practice history, repertoire, goals, notes and calendar'),
-          _WhatsNewRow(emoji: '👨‍👩‍👧', text: 'Sharing a device? Each account now keeps its own practice data'),
-          _WhatsNewRow(emoji: '👩‍🏫', text: 'Teachers can now see their students\' repertoire'),
-          _WhatsNewRow(emoji: '🛠️', text: 'Bug fixes and reliability improvements'),
+          _WhatsNewRow(emoji: '🎙', text: 'Record your practice and lessons — tap Record on the home screen, or the mic on a piece'),
+          _WhatsNewRow(emoji: '🐢', text: 'Slow recordings down, loop a tricky passage and add markers with notes'),
+          _WhatsNewRow(emoji: '📈', text: 'Recordings for a piece are listed oldest to newest, so you can hear your progress'),
+          _WhatsNewRow(emoji: '🎥', text: 'Zyntune Pro: record video to check posture and technique'),
+          _WhatsNewRow(emoji: '🔒', text: 'Recordings stay on your iPhone — share one only when you choose'),
         ]),
         actions: [
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
+              onPressed: () {
+                Navigator.pop(context);
+                Navigator.push(this.context, MaterialPageRoute(builder: (_) => const RecordingsScreen()));
+              },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF6B21FF), foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14))),
-              child: const Text("Let's go! 🚀", style: TextStyle(fontWeight: FontWeight.bold)),
+              child: const Text('Try Recording 🎙', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            child: TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Maybe Later', style: TextStyle(color: Colors.white54)),
             ),
           ),
         ],

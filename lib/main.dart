@@ -117,6 +117,15 @@ class _ZyntuneAppState extends State<ZyntuneApp> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     // A countdown may have finished while iOS had closed the app.
     WidgetsBinding.instance.addPostFrameCallback((_) => TimerService().syncOnResume());
+    // A phone call stopped a recording: offer to save it.
+    RecordingService().onStoppedByInterruption = (pending) {
+      final context = navigatorKey.currentContext;
+      if (context != null && context.mounted) {
+        showSaveRecordingDialog(context, pending);
+      } else {
+        RecordingService().save(pending, title: RecordingService.defaultTitle(pending.startedAt));
+      }
+    };
   }
 
   @override

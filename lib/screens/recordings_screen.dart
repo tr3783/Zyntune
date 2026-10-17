@@ -106,6 +106,36 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     await RecordingStore(uid).update(r);
   }
 
+  Future<bool> _confirmDelete(Recording r) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: _cardBg,
+        title: Text(r.isVideo ? 'Delete Video?' : 'Delete Recording?', style: const TextStyle(color: Colors.white)),
+        content: Text('"${r.title}" will be permanently deleted from this device.', style: const TextStyle(color: Colors.white70)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _delete(Recording r) async {
+    final uid = AuthService().currentUser?.uid;
+    if (uid == null) return;
+    // Remove from the list right away (Dismissible needs it gone), then
+    // from the device; the store's change notice reloads the list.
+    setState(() => _recordings.removeWhere((x) => x.id == r.id));
+    try {
+      await RecordingStore(uid).delete(r);
+    } catch (e) {
+      debugPrint('Deleting recording failed: $e');
+      _load();
+    }
+  }
+
   Future<void> _openVideo() async {
     if (RecordingService().isRecording) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Stop the audio recording first, then record video.')));
@@ -117,8 +147,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         builder: (ctx) => AlertDialog(
           backgroundColor: _cardBg,
           title: const Text('Video Recording', style: TextStyle(color: Colors.white)),
-          content: const Text('Record video of your practice to check posture and technique. Video recording is part of Zyntune Pro.',
-              style: TextStyle(color: Colors.white70)),
+          content: const Text('Record video of your practice to check posture and technique. Video recording is part of Zyntune Pro.', style: TextStyle(color: Colors.white70)),
           actions: [
             TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Not Now', style: TextStyle(color: Colors.white54))),
             ElevatedButton(
@@ -197,7 +226,6 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     );
   }
 
-
   Widget _filterChip(String label, bool selected, VoidCallback onTap) => Padding(
         padding: const EdgeInsets.only(right: 8),
         child: GestureDetector(
@@ -247,7 +275,13 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
             SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(children: [
-                _filterChip('All', _pieceFilter == null && !_favoritesOnly, () => setState(() { _pieceFilter = null; _favoritesOnly = false; })),
+                _filterChip(
+                    'All',
+                    _pieceFilter == null && !_favoritesOnly,
+                    () => setState(() {
+                          _pieceFilter = null;
+                          _favoritesOnly = false;
+                        })),
                 _filterChip('⭐ Favorites', _favoritesOnly, () => setState(() => _favoritesOnly = !_favoritesOnly)),
                 ...pieces.map((p) => _filterChip(p, _pieceFilter == p, () => setState(() => _pieceFilter = _pieceFilter == p ? null : p))),
               ]),
@@ -275,7 +309,20 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
               ),
             )
           else
-            ...visible.map((r) => GestureDetector(
+            ...visible.map((r) => Dismissible(
+                key: ValueKey(r.id),
+                // Swipe left to delete, after confirming.
+                direction: DismissDirection.endToStart,
+                confirmDismiss: (_) => _confirmDelete(r),
+                onDismissed: (_) => _delete(r),
+                background: Container(
+                  margin: const EdgeInsets.only(bottom: 10),
+                  padding: const EdgeInsets.only(right: 20),
+                  alignment: Alignment.centerRight,
+                  decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(16)),
+                  child: const Icon(Icons.delete_outline, color: Colors.white),
+                ),
+                child: GestureDetector(
                   onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecordingPlayerScreen(recording: r))),
                   child: Container(
                     margin: const EdgeInsets.only(bottom: 10),
@@ -308,7 +355,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                       ),
                     ]),
                   ),
-                )),
+                ))),
         ],
       ),
     );

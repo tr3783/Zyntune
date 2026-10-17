@@ -32,6 +32,8 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
   DateTime? _startedAt;
   Timer? _ticker;
   PendingRecording? _pendingAfterInterruption;
+  // 3-2-1 before recording starts, so there's time to get into position.
+  int? _countdown;
 
   @override
   void initState() {
@@ -54,6 +56,7 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
     if (state == AppLifecycleState.inactive || state == AppLifecycleState.paused) {
       // iOS stops the camera in the background: finish the recording now.
       if (_recording) _stop(interrupted: true);
+      if (_countdown != null) setState(() => _countdown = null);
     } else if (state == AppLifecycleState.resumed) {
       final pending = _pendingAfterInterruption;
       _pendingAfterInterruption = null;
@@ -138,7 +141,22 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
       );
       if (go != true) return;
     }
+    if (!mounted) return;
     setState(() => _busy = true);
+    for (var n = 3; n > 0; n--) {
+      setState(() => _countdown = n);
+      await Future.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      // Cancelled (tapped again) or the app left the screen.
+      if (_countdown == null || _controller != controller) {
+        setState(() {
+          _countdown = null;
+          _busy = false;
+        });
+        return;
+      }
+    }
+    setState(() => _countdown = null);
     try {
       await controller.startVideoRecording();
       await DeviceFiles.setKeepScreenOn(true);
@@ -224,6 +242,20 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
           else
             const Center(child: CircularProgressIndicator(color: Colors.white)),
 
+          // 3-2-1 countdown
+          if (_countdown != null)
+            Center(
+              child: Text(
+                '$_countdown',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 120,
+                  fontWeight: FontWeight.w900,
+                  shadows: [Shadow(color: Colors.black54, blurRadius: 16)],
+                ),
+              ),
+            ),
+
           // Top bar: close, timer, switch camera
           Positioned(
             top: 8,
@@ -233,7 +265,7 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
               IconButton(
                 tooltip: 'Close',
                 icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                onPressed: _recording ? null : () => Navigator.pop(context),
+                onPressed: _recording || _countdown != null ? null : () => Navigator.pop(context),
               ),
               const Spacer(),
               if (_recording)
@@ -250,7 +282,7 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
               IconButton(
                 tooltip: 'Switch camera',
                 icon: Icon(Icons.cameraswitch, color: _recording || _cameras.length < 2 ? Colors.white24 : Colors.white, size: 28),
-                onPressed: _recording ? null : _switchCamera,
+                onPressed: _recording || _countdown != null ? null : _switchCamera,
               ),
             ]),
           ),
@@ -263,7 +295,11 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
               right: 0,
               child: Column(children: [
                 GestureDetector(
-                  onTap: _busy ? null : (_recording ? _stop : _start),
+                  onTap: _countdown != null
+                      ? () => setState(() => _countdown = null)
+                      : _busy
+                          ? null
+                          : (_recording ? _stop : _start),
                   child: Container(
                     width: 78,
                     height: 78,
@@ -281,7 +317,11 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
                 ),
                 const SizedBox(height: 10),
                 Text(
-                  _recording ? 'Keep Zyntune open while recording video' : 'Videos are stored only on this iPhone',
+                  _recording
+                      ? 'Keep Zyntune open while recording video'
+                      : _countdown != null
+                          ? 'Tap to cancel'
+                          : 'Videos are stored only on this iPhone',
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ]),
