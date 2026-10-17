@@ -186,7 +186,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (context) => AlertDialog(
         backgroundColor: _cardBg,
         title: const Text('Delete Account', style: TextStyle(color: Colors.white)),
-        content: const Text('This will permanently delete your account and all your data. This cannot be undone.', style: TextStyle(color: Colors.white70)),
+        content: const Text('This will permanently delete your account and all your data, including your recordings on this iPhone — share any you want to keep first. This cannot be undone.', style: TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
           ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text('Delete Forever')),
