@@ -4,6 +4,7 @@ import '../date_format.dart';
 import '../purchase_service.dart';
 import '../recording_service.dart';
 import '../recordings.dart';
+import 'metronome_control.dart';
 import 'recording_flow.dart';
 import 'recording_player_screen.dart';
 import 'video_record_screen.dart';
@@ -240,6 +241,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
           textAlign: TextAlign.center,
           style: const TextStyle(color: Colors.white54, fontSize: 12),
         ),
+        const SizedBox(height: 14),
+        const MetronomeControl(),
       ]),
     );
   }
