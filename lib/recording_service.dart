@@ -56,6 +56,11 @@ class RecordingService extends ChangeNotifier {
   DateTime? _startedAt;
   String? _piece;
   Timer? _meterTimer;
+  // Watchdog: iOS doesn't always tell the app when something (e.g. Siri)
+  // takes the microphone, but the file then stops growing.
+  int _lastSize = -1;
+  DateTime? _lastGrowth;
+  static const _stalledAfter = Duration(seconds: 5);
   // Files being recorded or waiting in a Save dialog; recovery skips them.
   final Set<String> _inUse = {};
   Set<String> get filesInUse => Set.unmodifiable(_inUse);
@@ -99,7 +104,12 @@ class RecordingService extends ChangeNotifier {
       _startedAt = DateTime.now();
       _piece = piece;
       _inUse.add(path);
-      _ticker = Timer.periodic(const Duration(seconds: 1), (_) => notifyListeners());
+      _lastSize = -1;
+      _lastGrowth = DateTime.now();
+      _ticker = Timer.periodic(const Duration(seconds: 1), (_) {
+        notifyListeners();
+        _checkStillRecording();
+      });
       _meterTimer = Timer.periodic(const Duration(milliseconds: 120), (_) => _updateLevel());
       notifyListeners();
       return RecordingStartResult.started;
@@ -107,6 +117,23 @@ class RecordingService extends ChangeNotifier {
       debugPrint('RecordingService start failed: $e');
       return RecordingStartResult.failed;
     }
+  }
+
+  Future<void> _checkStillRecording() async {
+    final path = _path;
+    if (path == null) return;
+    try {
+      final size = await File(path).length();
+      final now = DateTime.now();
+      if (size != _lastSize) {
+        _lastSize = size;
+        _lastGrowth = now;
+      } else if (_lastGrowth != null && now.difference(_lastGrowth!) > _stalledAfter && _path == path) {
+        debugPrint('RecordingService: file stopped growing; treating as interrupted');
+        _lastGrowth = null;
+        await _onInterrupted();
+      }
+    } catch (_) {}
   }
 
   Future<void> _updateLevel() async {
@@ -163,7 +190,9 @@ class RecordingService extends ChangeNotifier {
       uid: pending.uid,
       path: pending.path,
       startedAt: startedAt,
-      durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+      // The file's own length; the clock would count time after an
+      // interruption silently stopped the recorder.
+      durationMs: await Mp4Duration.read(pending.path) ?? DateTime.now().difference(startedAt).inMilliseconds,
       piece: pending.piece,
       interrupted: interrupted,
     );
