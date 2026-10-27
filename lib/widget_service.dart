@@ -1,6 +1,7 @@
 import 'package:home_widget/home_widget.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'purchase_service.dart';
+import 'streak_helper.dart';
 
 class WidgetService {
   static const _appGroupId = 'group.com.topher.zyntune';
@@ -15,7 +16,7 @@ class WidgetService {
       final prefs = await SharedPreferences.getInstance();
 
       // Get streak
-      final currentStreak = prefs.getInt('currentStreak') ?? 0;
+      final currentStreak = StreakHelper.effectiveStreak(prefs);
 
       // Get today's minutes
       final sessions = prefs.getStringList('practiceSessions') ?? [];

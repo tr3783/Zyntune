@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'dart:io';
 import '../purchase_service.dart';
 import 'paywall_screen.dart';
+import '../streak_helper.dart';
 
 // --- Achievement model ---
 class Achievement {
@@ -173,7 +174,7 @@ class _StatsScreenState extends State<StatsScreen> {
       _totalSessions = sessions.length;
       _totalMinutes = total;
       _avgMinutes = sessions.isEmpty ? 0 : total / sessions.length;
-      _currentStreak = prefs.getInt('currentStreak') ?? 0;
+      _currentStreak = StreakHelper.effectiveStreak(prefs);
       _longestStreak = prefs.getInt('longestStreak') ?? 0;
       _userName = prefs.getString('userName') ?? 'Musician';
       _instruments = instrumentSet.toList();

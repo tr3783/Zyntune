@@ -29,7 +29,7 @@ Future<void> startRecording(BuildContext context, {String? piece}) async {
           title: const Text('Recording Limit Reached',
               style: TextStyle(color: Colors.white)),
           content: const Text(
-            'Free accounts can keep 3 recordings. Upgrade to Zyntune Pro for unlimited recordings, or delete one to make room.',
+            'Free accounts can keep 3 audio recordings. Upgrade to Zyntune Pro for unlimited recordings, or delete one to make room.',
             style: TextStyle(color: Colors.white70),
           ),
           actions: [

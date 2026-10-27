@@ -1,11 +1,26 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class MetronomeService extends ChangeNotifier {
   static final MetronomeService _instance = MetronomeService._internal();
   factory MetronomeService() => _instance;
   MetronomeService._internal() {
     _setupChannel();
+    _loadBpm();
+  }
+
+  // The last tempo is remembered on this device between launches.
+  static const _bpmKey = 'metronomeBpm';
+
+  Future<void> _loadBpm() async {
+    try {
+      final saved = (await SharedPreferences.getInstance()).getInt(_bpmKey);
+      if (saved != null && saved != bpm) {
+        bpm = saved.clamp(40, 240);
+        notifyListeners();
+      }
+    } catch (_) {}
   }
 
   static const _channel = MethodChannel('com.topher.zyntune/metronome');
@@ -52,6 +67,7 @@ class MetronomeService extends ChangeNotifier {
   void updateBpm(int newBpm) async {
     bpm = newBpm.clamp(40, 240);
     notifyListeners();
+    SharedPreferences.getInstance().then((prefs) => prefs.setInt(_bpmKey, bpm)).catchError((_) => false);
     try {
       if (isPlaying) {
         await _channel.invokeMethod('updateBpm', bpm.toDouble());

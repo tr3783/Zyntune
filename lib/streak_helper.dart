@@ -67,10 +67,26 @@ class StreakHelper {
     return true;
   }
 
+  /// The streak to show. The saved streak only changes when a session is
+  /// saved, so after missed days it would still show the old number; this
+  /// returns 0 once the streak is broken (a missed day covered by an active
+  /// Streak Freeze still counts). [now] is for tests.
+  static int effectiveStreak(SharedPreferences prefs, {DateTime? now}) {
+    final saved = prefs.getInt('currentStreak') ?? 0;
+    final last = prefs.getString('lastPracticeDate') ?? '';
+    if (saved == 0 || last.isEmpty) return saved;
+    final today = now ?? DateTime.now();
+    String daysAgo(int n) => _dateString(DateTime(today.year, today.month, today.day - n));
+    if (last == daysAgo(0) || last == daysAgo(1)) return saved;
+    final freezeActive = prefs.getBool('streakFreezeActive') ?? false;
+    if (freezeActive && last == daysAgo(2)) return saved;
+    return 0;
+  }
+
   static Future<Map<String, dynamic>> getStreakData() async {
     final prefs = await SharedPreferences.getInstance();
     return {
-      'currentStreak': prefs.getInt('currentStreak') ?? 0,
+      'currentStreak': effectiveStreak(prefs),
       'longestStreak': prefs.getInt('longestStreak') ?? 0,
       'practicePoints': prefs.getInt('practicePoints') ?? 0,
       'streakFreezeActive': prefs.getBool('streakFreezeActive') ?? false,

@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'auth_service.dart';
 import 'package:cloud_functions/cloud_functions.dart';
+import 'streak_helper.dart';
 
 class FirestoreService {
   static final FirestoreService _instance = FirestoreService._internal();
@@ -64,7 +65,7 @@ class FirestoreService {
     try {
       final prefs = await SharedPreferences.getInstance();
       final sessions = prefs.getStringList('practiceSessions') ?? [];
-      final streak = prefs.getInt('currentStreak') ?? 0;
+      final streak = StreakHelper.effectiveStreak(prefs);
       final longestStreak = prefs.getInt('longestStreak') ?? 0;
       final totalMinutes = sessions.fold<int>(0, (sum, s) {
         try {
