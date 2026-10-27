@@ -300,14 +300,15 @@ class _MetronomeScreenState extends State<MetronomeScreen>
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              SizedBox(
-                                width: 160,
+                              // Takes the room between the -/+ buttons so 3-digit
+                              // tempos aren't cut off.
+                              Expanded(
                                 child: TextField(
                               controller: _bpmController,
                               focusNode: _bpmFocusNode,
                               keyboardType: TextInputType.number,
                               textAlign: TextAlign.center,
-                              style: const TextStyle(fontSize: 88, fontWeight: FontWeight.w900, color: Colors.white, height: 1),
+                              style: const TextStyle(fontSize: 80, fontWeight: FontWeight.w900, color: Colors.white, height: 1),
                               decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero),
                               inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(3)],
                               onChanged: (val) {

@@ -28,7 +28,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   TimeOfDay _reminderTime = const TimeOfDay(hour: 9, minute: 0);
 
   static const List<String> _instruments = [
-    'Guitar', 'Bass', 'Piano', 'Violin', 'Viola', 'Cello',
+    'Guitar', 'Bass', 'Banjo', 'Piano', 'Violin', 'Viola', 'Cello',
     'Drums', 'Voice', 'Trumpet', 'Flute', 'Saxophone', 'Clarinet', 'Other',
   ];
   List<String> _selectedInstruments = ['Guitar'];

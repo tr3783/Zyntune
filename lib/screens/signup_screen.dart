@@ -23,7 +23,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   final List<String> _instruments = [
     'Guitar', 'Piano', 'Violin', 'Viola', 'Cello',
-    'Bass', 'Drums', 'Voice', 'Trumpet', 'Flute',
+    'Bass', 'Banjo', 'Drums', 'Voice', 'Trumpet', 'Flute',
     'Saxophone', 'Clarinet', 'Other',
   ];
 
