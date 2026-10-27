@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../device_files.dart';
+import '../metronome_service.dart';
 import '../recording_service.dart';
 import 'recording_flow.dart';
 
@@ -47,8 +48,44 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
     WidgetsBinding.instance.removeObserver(this);
     _ticker?.cancel();
     DeviceFiles.setKeepScreenOn(false);
-    _controller?.dispose();
+    final controller = _controller;
+    if (_recording && controller != null) {
+      // Closed some other way mid-recording: keep the video with a default name.
+      _saveOnClose(controller, _startedAt ?? DateTime.now(), widget.piece);
+    } else {
+      controller?.dispose();
+    }
     super.dispose();
+  }
+
+  static Future<void> _saveOnClose(CameraController controller, DateTime startedAt, String? piece) async {
+    try {
+      final file = await controller.stopVideoRecording();
+      final pending = await RecordingService().adoptVideo(
+        file.path,
+        startedAt: startedAt,
+        durationMs: DateTime.now().difference(startedAt).inMilliseconds,
+        piece: piece,
+      );
+      if (pending != null) {
+        await RecordingService().save(pending, title: RecordingService.defaultTitle(startedAt, video: true));
+      }
+    } catch (e) {
+      debugPrint('Saving video on close failed: $e');
+    } finally {
+      await controller.dispose();
+    }
+  }
+
+  /// Swiping back while recording stops and offers to save, instead of
+  /// throwing the video away.
+  void _onBack(bool didPop, Object? _) {
+    if (didPop) return;
+    if (_countdown != null) {
+      setState(() => _countdown = null);
+    } else if (_recording && !_busy) {
+      _stop();
+    }
   }
 
   @override
@@ -110,8 +147,7 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
     }
   }
 
-  static const _accessMessage =
-      'Zyntune needs camera and microphone access to record video. You can allow it in iPhone Settings.';
+  static const _accessMessage = 'Zyntune needs camera and microphone access to record video. You can allow it in iPhone Settings.';
 
   Future<void> _switchCamera() async {
     if (_recording || _cameras.length < 2) return;
@@ -219,115 +255,158 @@ class _VideoRecordScreenState extends State<VideoRecordScreen> with WidgetsBindi
   @override
   Widget build(BuildContext context) {
     final controller = _controller;
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: SafeArea(
-        child: Stack(children: [
-          // Camera preview
-          if (controller != null && controller.value.isInitialized)
-            Center(child: CameraPreview(controller))
-          else if (_error != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 16)),
-                  if (_error == _accessMessage) ...[
-                    const SizedBox(height: 16),
-                    const ElevatedButton(onPressed: openAppSettings, child: Text('Open Settings')),
-                  ],
-                ]),
-              ),
-            )
-          else
-            const Center(child: CircularProgressIndicator(color: Colors.white)),
-
-          // 3-2-1 countdown
-          if (_countdown != null)
-            Center(
-              child: Text(
-                '$_countdown',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 120,
-                  fontWeight: FontWeight.w900,
-                  shadows: [Shadow(color: Colors.black54, blurRadius: 16)],
-                ),
-              ),
-            ),
-
-          // Top bar: close, timer, switch camera
-          Positioned(
-            top: 8,
-            left: 8,
-            right: 8,
-            child: Row(children: [
-              IconButton(
-                tooltip: 'Close',
-                icon: const Icon(Icons.close, color: Colors.white, size: 28),
-                onPressed: _recording || _countdown != null ? null : () => Navigator.pop(context),
-              ),
-              const Spacer(),
-              if (_recording)
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(color: _recordRed, borderRadius: BorderRadius.circular(16)),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
-                    const SizedBox(width: 6),
-                    Text(_elapsed(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()])),
+    return PopScope(
+      canPop: !_recording && _countdown == null && !_busy,
+      onPopInvokedWithResult: _onBack,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: SafeArea(
+          child: Stack(children: [
+            // Camera preview
+            if (controller != null && controller.value.isInitialized)
+              Center(child: CameraPreview(controller))
+            else if (_error != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(32),
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    Text(_error!, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 16)),
+                    if (_error == _accessMessage) ...[
+                      const SizedBox(height: 16),
+                      const ElevatedButton(onPressed: openAppSettings, child: Text('Open Settings')),
+                    ],
                   ]),
                 ),
-              const Spacer(),
-              IconButton(
-                tooltip: 'Switch camera',
-                icon: Icon(Icons.cameraswitch, color: _recording || _cameras.length < 2 ? Colors.white24 : Colors.white, size: 28),
-                onPressed: _recording || _countdown != null ? null : _switchCamera,
-              ),
-            ]),
-          ),
+              )
+            else
+              const Center(child: CircularProgressIndicator(color: Colors.white)),
 
-          // Record / stop button
-          if (controller != null && controller.value.isInitialized)
-            Positioned(
-              bottom: 32,
-              left: 0,
-              right: 0,
-              child: Column(children: [
-                GestureDetector(
-                  onTap: _countdown != null
-                      ? () => setState(() => _countdown = null)
-                      : _busy
-                          ? null
-                          : (_recording ? _stop : _start),
-                  child: Container(
-                    width: 78,
-                    height: 78,
-                    decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
-                    padding: const EdgeInsets.all(6),
-                    child: AnimatedContainer(
-                      duration: const Duration(milliseconds: 200),
-                      decoration: BoxDecoration(
-                        color: _recordRed,
-                        borderRadius: BorderRadius.circular(_recording ? 8 : 40),
-                      ),
-                      margin: EdgeInsets.all(_recording ? 14 : 0),
-                    ),
+            // 3-2-1 countdown
+            if (_countdown != null)
+              Center(
+                child: Text(
+                  '$_countdown',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 120,
+                    fontWeight: FontWeight.w900,
+                    shadows: [Shadow(color: Colors.black54, blurRadius: 16)],
                   ),
                 ),
-                const SizedBox(height: 10),
-                Text(
-                  _recording
-                      ? 'Keep Zyntune open while recording video'
-                      : _countdown != null
-                          ? 'Tap to cancel'
-                          : 'Videos are stored only on this iPhone',
-                  style: const TextStyle(color: Colors.white70, fontSize: 12),
+              ),
+
+            // Top bar: close, timer, switch camera
+            Positioned(
+              top: 8,
+              left: 8,
+              right: 8,
+              child: Row(children: [
+                IconButton(
+                  tooltip: 'Close',
+                  icon: const Icon(Icons.close, color: Colors.white, size: 28),
+                  onPressed: _recording || _countdown != null ? null : () => Navigator.pop(context),
+                ),
+                const Spacer(),
+                if (_recording)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(color: _recordRed, borderRadius: BorderRadius.circular(16)),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      const Icon(Icons.fiber_manual_record, color: Colors.white, size: 12),
+                      const SizedBox(width: 6),
+                      Text(_elapsed(), style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontFeatures: [FontFeature.tabularFigures()])),
+                    ]),
+                  ),
+                const Spacer(),
+                IconButton(
+                  tooltip: 'Switch camera',
+                  icon: Icon(Icons.cameraswitch, color: _recording || _cameras.length < 2 ? Colors.white24 : Colors.white, size: 28),
+                  onPressed: _recording || _countdown != null ? null : _switchCamera,
                 ),
               ]),
             ),
-        ]),
+
+            // Record / stop button
+            if (controller != null && controller.value.isInitialized)
+              Positioned(
+                bottom: 32,
+                left: 0,
+                right: 0,
+                child: Column(children: [
+                  const _MetronomeControl(),
+                  const SizedBox(height: 16),
+                  GestureDetector(
+                    onTap: _countdown != null
+                        ? () => setState(() => _countdown = null)
+                        : _busy
+                            ? null
+                            : (_recording ? _stop : _start),
+                    child: Container(
+                      width: 78,
+                      height: 78,
+                      decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: Colors.white, width: 4)),
+                      padding: const EdgeInsets.all(6),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        decoration: BoxDecoration(
+                          color: _recordRed,
+                          borderRadius: BorderRadius.circular(_recording ? 8 : 40),
+                        ),
+                        margin: EdgeInsets.all(_recording ? 14 : 0),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    _recording
+                        ? 'Keep Zyntune open while recording video'
+                        : _countdown != null
+                            ? 'Tap to cancel'
+                            : 'Videos are stored only on this iPhone',
+                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                  ),
+                ]),
+              ),
+          ]),
+        ),
       ),
+    );
+  }
+}
+
+/// Start/stop the metronome and change the tempo without leaving the camera.
+class _MetronomeControl extends StatelessWidget {
+  const _MetronomeControl();
+
+  @override
+  Widget build(BuildContext context) {
+    final metronome = MetronomeService();
+    return ListenableBuilder(
+      listenable: metronome,
+      builder: (context, _) {
+        Widget step(IconData icon, String tip, int delta) => IconButton(
+              tooltip: tip,
+              visualDensity: VisualDensity.compact,
+              icon: Icon(icon, color: Colors.white, size: 20),
+              onPressed: () => metronome.updateBpm(metronome.bpm + delta),
+            );
+        return Container(
+          decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(24)),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(mainAxisSize: MainAxisSize.min, children: [
+            step(Icons.remove, 'Slower', -1),
+            TextButton.icon(
+              onPressed: metronome.isPlaying ? metronome.stop : metronome.start,
+              icon: Icon(metronome.isPlaying ? Icons.stop_rounded : Icons.play_arrow_rounded, color: Colors.white),
+              label: Text(
+                '${metronome.bpm} BPM',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()]),
+              ),
+            ),
+            step(Icons.add, 'Faster', 1),
+          ]),
+        );
+      },
     );
   }
 }
