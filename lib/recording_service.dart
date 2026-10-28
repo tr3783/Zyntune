@@ -232,7 +232,10 @@ class RecordingService extends ChangeNotifier {
     }
     _inUse.add(dest);
     await DeviceFiles.excludeFromBackup(dest);
-    return PendingRecording(id: id, uid: uid, path: dest, startedAt: startedAt, durationMs: durationMs, piece: piece, isVideo: true);
+    // The video's own length: iOS skips the time the camera was paused (e.g.
+    // while Siri was open), which the clock would still count.
+    final fileMs = await Mp4Duration.read(dest);
+    return PendingRecording(id: id, uid: uid, path: dest, startedAt: startedAt, durationMs: fileMs ?? durationMs, piece: piece, isVideo: true);
   }
 
   Future<void> discard(PendingRecording pending) async {
