@@ -6,6 +6,7 @@ import '../recording_service.dart';
 import '../recordings.dart';
 import 'metronome_control.dart';
 import 'recording_flow.dart';
+import 'recently_deleted_screen.dart';
 import 'recording_player_screen.dart';
 import 'video_record_screen.dart';
 import 'paywall_screen.dart';
@@ -32,6 +33,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   bool _loading = true;
   bool _loadFailed = false;
   int _bytes = 0;
+  int _trashCount = 0;
   late String? _pieceFilter = widget.piece;
   bool _favoritesOnly = false;
   // Ids of recordings picked for deleting; null when not selecting.
@@ -76,6 +78,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         }
         list = await store.load();
         _bytes = await store.totalBytes();
+        // Also clears out anything deleted more than 7 days ago.
+        _trashCount = (await store.loadTrash()).length;
       }
     } catch (e) {
       debugPrint('Loading recordings failed: $e');
@@ -126,34 +130,38 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     await RecordingStore(uid).update(r);
   }
 
-  Future<bool> _confirmDelete(Recording r) async {
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: _cardBg,
-        title: Text(r.isVideo ? 'Delete Video?' : 'Delete Recording?', style: const TextStyle(color: Colors.white)),
-        content: Text('"${r.title}" will be permanently deleted from this device.', style: const TextStyle(color: Colors.white70)),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
-        ],
-      ),
-    );
-    return ok == true;
-  }
-
-  Future<void> _delete(Recording r) async {
+  /// Moves recordings to Recently Deleted, with Undo.
+  Future<void> _moveToTrash(List<Recording> recordings) async {
     final uid = AuthService().currentUser?.uid;
-    if (uid == null) return;
-    // Remove from the list right away (Dismissible needs it gone), then
-    // from the device; the store's change notice reloads the list.
-    setState(() => _recordings.removeWhere((x) => x.id == r.id));
+    if (uid == null || recordings.isEmpty) return;
+    final ids = recordings.map((r) => r.id).toSet();
+    // Remove from the list right away (Dismissible needs it gone); the
+    // store's change notice reloads the list.
+    setState(() => _recordings.removeWhere((x) => ids.contains(x.id)));
+    final store = RecordingStore(uid);
     try {
-      await RecordingStore(uid).delete(r);
+      await store.moveToTrash(recordings);
     } catch (e) {
-      debugPrint('Deleting recording failed: $e');
+      debugPrint('Deleting recordings failed: $e');
       _load();
+      return;
     }
+    if (!mounted) return;
+    final n = recordings.length;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(n == 1 ? 'Moved to Recently Deleted.' : 'Moved $n recordings to Recently Deleted.'),
+        duration: const Duration(seconds: 5),
+        persist: false,
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            final trash = await store.loadTrash();
+            await store.restore(trash.where((t) => ids.contains(t.recording.id)));
+          },
+        ),
+      ));
   }
 
   void _startSelecting([Recording? first]) => setState(() => _selected = {if (first != null) first.id});
@@ -166,22 +174,17 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
       });
 
   Future<void> _deleteSelected() async {
-    final uid = AuthService().currentUser?.uid;
     final ids = _selected;
-    if (uid == null || ids == null || ids.isEmpty) return;
+    if (ids == null || ids.isEmpty) return;
     final chosen = _recordings.where((r) => ids.contains(r.id)).toList();
-    final videos = chosen.where((r) => r.isVideo).length;
     final count = chosen.length;
-    final noun = count == 1 ? (videos == 1 ? 'Video' : 'Recording') : 'Recordings';
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardBg,
-        title: Text(count == 1 ? 'Delete $noun?' : 'Delete $count $noun?', style: const TextStyle(color: Colors.white)),
+        title: Text(count == 1 ? 'Delete 1 Recording?' : 'Delete $count Recordings?', style: const TextStyle(color: Colors.white)),
         content: Text(
-          count == 1
-              ? '"${chosen.first.title}" will be permanently deleted from this device.'
-              : 'These $count recordings${videos > 0 ? ' (including $videos video${videos == 1 ? '' : 's'})' : ''} will be permanently deleted from this device.',
+          '${count == 1 ? 'It moves' : 'They move'} to Recently Deleted, where you can restore ${count == 1 ? 'it' : 'them'} for ${RecordingStore.trashDays} days.',
           style: const TextStyle(color: Colors.white70),
         ),
         actions: [
@@ -191,19 +194,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
       ),
     );
     if (ok != true || !mounted) return;
-    setState(() {
-      _recordings.removeWhere((r) => ids.contains(r.id));
-      _selected = null;
-    });
-    try {
-      await RecordingStore(uid).deleteMany(chosen);
-    } catch (e) {
-      debugPrint('Deleting recordings failed: $e');
-      _load();
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(count == 1 ? 'Deleted 1 recording.' : 'Deleted $count recordings.')));
-    }
+    setState(() => _selected = null);
+    await _moveToTrash(chosen);
   }
 
   Widget _selectCircle(bool selected) => AnimatedContainer(
@@ -425,10 +417,9 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
             else
               ...visible.map((r) => Dismissible(
                   key: ValueKey(r.id),
-                  // Swipe left to delete, after confirming (not while selecting).
+                  // Swipe left to move to Recently Deleted (not while selecting).
                   direction: selecting ? DismissDirection.none : DismissDirection.endToStart,
-                  confirmDismiss: (_) => _confirmDelete(r),
-                  onDismissed: (_) => _delete(r),
+                  onDismissed: (_) => _moveToTrash([r]),
                   background: Container(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.only(right: 20),
@@ -476,6 +467,24 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                       ]),
                     ),
                   ))),
+            if (!selecting && _trashCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: ListTile(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const RecentlyDeletedScreen())).then((_) => _load());
+                  },
+                  tileColor: Colors.white.withValues(alpha: 0.05),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  leading: const Icon(Icons.delete_outline, color: Colors.white54),
+                  title: const Text('Recently Deleted', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('$_trashCount', style: const TextStyle(color: Colors.white54)),
+                    const Icon(Icons.chevron_right, color: Colors.white38),
+                  ]),
+                ),
+              ),
           ],
         ),
         bottomNavigationBar: selecting

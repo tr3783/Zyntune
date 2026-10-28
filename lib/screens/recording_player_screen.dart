@@ -193,8 +193,8 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardBg,
-        title: const Text('Delete Recording?', style: TextStyle(color: Colors.white)),
-        content: Text('"${_r.title}" will be permanently deleted from this device.', style: const TextStyle(color: Colors.white70)),
+        title: Text(_r.isVideo ? 'Delete Video?' : 'Delete Recording?', style: const TextStyle(color: Colors.white)),
+        content: Text('It moves to Recently Deleted, where you can restore it for ${RecordingStore.trashDays} days.', style: const TextStyle(color: Colors.white70)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
@@ -203,7 +203,7 @@ class _RecordingPlayerScreenState extends State<RecordingPlayerScreen> {
     );
     if (confirm != true) return;
     await _player.stop();
-    await _store?.delete(_r);
+    await _store?.moveToTrash([_r]);
     if (mounted) Navigator.pop(context);
   }
 
