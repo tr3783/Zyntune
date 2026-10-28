@@ -169,11 +169,18 @@ class RecordingStore {
     changes.value++;
   }
 
-  Future<void> delete(Recording recording) async {
-    final file = File(await pathFor(recording));
-    if (await file.exists()) await file.delete();
+  Future<void> delete(Recording recording) => deleteMany([recording]);
+
+  /// Deletes several recordings at once (one list update).
+  Future<void> deleteMany(Iterable<Recording> recordings) async {
+    final ids = recordings.map((r) => r.id).toSet();
+    if (ids.isEmpty) return;
+    for (final r in recordings) {
+      final file = File(await pathFor(r));
+      if (await file.exists()) await file.delete();
+    }
     final all = await load();
-    all.removeWhere((r) => r.id == recording.id);
+    all.removeWhere((r) => ids.contains(r.id));
     await _save(all);
     changes.value++;
   }

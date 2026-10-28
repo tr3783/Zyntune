@@ -56,6 +56,17 @@ void main() {
     expect(await store.load(), isEmpty);
   });
 
+  test('several recordings can be deleted at once', () async {
+    final store = RecordingStore('amy', baseDir: base);
+    final a = await addRecording(store, 'a');
+    final b = await addRecording(store, 'b');
+    await addRecording(store, 'c');
+    await store.deleteMany([a, b]);
+    expect((await store.load()).map((r) => r.id), ['c']);
+    expect(File(await store.pathFor(a)).existsSync(), isFalse);
+    expect(File(await store.pathFor(b)).existsSync(), isFalse);
+  });
+
   test('entries whose audio file is missing are skipped', () async {
     final store = RecordingStore('amy', baseDir: base);
     final r = await addRecording(store, '1');
