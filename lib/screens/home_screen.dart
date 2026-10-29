@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../practice_tips.dart';
 import '../date_format.dart';
 import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -51,36 +52,11 @@ class _HomeScreenState extends State<HomeScreen> {
   List<String> _pieceNames = [];
   String _userRole = 'student';
 
-  final List<Map<String, dynamic>> _allTips = [
-    {'tip': 'Practicing 20 minutes daily is more effective than 2 hours once a week.', 'color': Colors.deepPurple},
-    {'tip': 'Always start new pieces slowly. Speed comes naturally with repetition.', 'color': Colors.teal},
-    {'tip': 'Isolate difficult passages and repeat them in small chunks.', 'color': Colors.orange},
-    {'tip': 'Record yourself playing — you\'ll hear things you miss while playing.', 'color': Colors.pink},
-    {'tip': 'Practice hands separately before putting them together on piano pieces.', 'color': Colors.blue},
-    {'tip': 'Use a metronome even on slow practice — consistency builds muscle memory.', 'color': Colors.green},
-    {'tip': 'Take breaks every 25-30 minutes. Your brain consolidates learning during rest.', 'color': Colors.indigo},
-    {'tip': 'Focus on the transition between difficult sections, not just the hard part itself.', 'color': Colors.deepOrange},
-    {'tip': 'Sing or hum the melody before playing it — internalize the music first.', 'color': Colors.purple},
-    {'tip': 'Practice in different keys or positions to deepen your understanding.', 'color': Colors.cyan},
-    {'tip': 'End every practice session on something you do well — finish positively!', 'color': Colors.amber},
-    {'tip': 'Listen to professional recordings of pieces you\'re learning for inspiration.', 'color': Colors.red},
-    {'tip': 'Memorize small sections at a time — 4 bars is easier than a whole page.', 'color': Colors.teal},
-    {'tip': 'Practice the ending of a piece first — you\'ll always know how to finish!', 'color': Colors.deepPurple},
-    {'tip': 'Pay attention to dynamics. Playing loud and soft expressively sets great musicians apart.', 'color': Colors.blue},
-    {'tip': 'Mental practice counts — visualize fingering and passages away from your instrument.', 'color': Colors.green},
-    {'tip': 'Set a specific goal for each practice session before you begin.', 'color': Colors.orange},
-    {'tip': 'Practice sight-reading something new every day — even just a few lines.', 'color': Colors.pink},
-    {'tip': 'Tension is the enemy of technique. Check your shoulders, arms, and hands regularly.', 'color': Colors.indigo},
-    {'tip': 'Celebrate small wins — every passage mastered is real progress!', 'color': Colors.amber},
-  ];
 
   List<Map<String, dynamic>> get _todaysTips {
-    final dayOfYear = DateTime.now().difference(DateTime(DateTime.now().year, 1, 1)).inDays;
-    final startIndex = (dayOfYear * 3) % _allTips.length;
+    const colors = [Colors.deepPurple, Colors.teal, Colors.orange, Colors.pink, Colors.blue, Colors.green, Colors.indigo, Colors.deepOrange, Colors.purple, Colors.cyan, Colors.amber, Colors.red];
     return [
-      _allTips[startIndex % _allTips.length],
-      _allTips[(startIndex + 1) % _allTips.length],
-      _allTips[(startIndex + 2) % _allTips.length],
+      for (final (i, tip) in tipsForDay(DateTime.now()).indexed) {'tip': tip, 'color': colors[(DateTime.now().day * 3 + i) % colors.length]},
     ];
   }
 
