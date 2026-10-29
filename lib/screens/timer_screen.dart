@@ -508,12 +508,12 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                   }).toList(),
                 ),
               ),
+              // Movements of the selected piece, right under its group so
+              // they're seen without scrolling.
+              if (pieces.contains(selectedRef[0])) ..._buildMovementSelector(selectedRef, setDialogState),
             ],
           );
         }),
-
-        // Movement of the selected piece, if it has movements
-        ..._buildMovementSelector(selectedRef, setDialogState),
 
         if (_assignedPieces.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -554,7 +554,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       );
     }
     return [
-      const Text('Movement', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+      Text('Movement of ${selectedRef[0]}', style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
