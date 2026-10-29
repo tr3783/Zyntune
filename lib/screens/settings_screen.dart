@@ -9,6 +9,7 @@ import '../auth_service.dart';
 import '../icloud_sync_service.dart';
 import 'paywall_screen.dart';
 import 'link_teacher_screen.dart';
+import 'help_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -458,6 +459,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   _ActionRow(icon: Icons.school_outlined, label: 'My Teacher / Join Studio', color: const Color(0xFF00BFA5), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const LinkTeacherScreen()))),
                 if (_userRole == 'student')
                   const Divider(color: Colors.white12, height: 20),
+                _ActionRow(icon: Icons.help_outline, label: 'Help & FAQ', color: const Color(0xFF9B59B6), onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HelpScreen()))),
+                const Divider(color: Colors.white12, height: 20),
                 _ActionRow(icon: Icons.logout, label: 'Sign Out', color: Colors.orange, onTap: _signOut),
                 const Divider(color: Colors.white12, height: 20),
                 _ActionRow(icon: Icons.delete_forever, label: 'Delete Account', color: Colors.red, onTap: _deleteAccount),

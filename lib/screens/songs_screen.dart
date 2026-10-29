@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'paywall_screen.dart';
 import 'recordings_screen.dart';
 import '../purchase_service.dart';
+import 'tool_intro.dart';
 
 enum PieceStatus { wishlist, workingOn, performanceReady }
 enum MovementStatus { notStarted, learning, performanceReady }
@@ -585,6 +586,7 @@ class _SongsScreenState extends State<SongsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
       appBar: AppBar(
+        actions: const [ToolIntroButton('repertoire')],
         title: const Text('My Repertoire', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,

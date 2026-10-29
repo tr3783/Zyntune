@@ -80,6 +80,25 @@ class Recording {
       );
 }
 
+/// A recording in Recently Deleted, kept for [RecordingStore.trashDays] days.
+class TrashedRecording {
+  final Recording recording;
+  final DateTime deletedAt;
+
+  TrashedRecording(this.recording, this.deletedAt);
+
+  /// Whole days left before it's deleted for good (at least 0).
+  int daysLeft(DateTime now) {
+    final left = deletedAt.add(const Duration(days: RecordingStore.trashDays)).difference(now);
+    return left.isNegative ? 0 : (left.inHours / 24).ceil();
+  }
+
+  Map<String, dynamic> toJson() => {...recording.toJson(), 'deletedAt': deletedAt.toIso8601String()};
+
+  factory TrashedRecording.fromJson(Map<String, dynamic> json) =>
+      TrashedRecording(Recording.fromJson(json), DateTime.tryParse(json['deletedAt'] as String? ?? '') ?? DateTime.now());
+}
+
 /// Recordings live only on this device, in a folder per account:
 /// Documents/recordings/<uid>/ with the audio files and an index.json.
 /// Keeping them per account keeps them separate on shared devices; the
@@ -91,6 +110,9 @@ class RecordingStore {
   final Directory? _baseDir;
 
   static const freeLimit = 3;
+
+  /// Days a deleted recording stays in Recently Deleted.
+  static const trashDays = 7;
 
   /// Bumped whenever recordings are added, changed or deleted, so screens
   /// showing them can refresh.
@@ -169,11 +191,18 @@ class RecordingStore {
     changes.value++;
   }
 
-  Future<void> delete(Recording recording) async {
-    final file = File(await pathFor(recording));
-    if (await file.exists()) await file.delete();
+  Future<void> delete(Recording recording) => deleteMany([recording]);
+
+  /// Deletes several recordings at once (one list update).
+  Future<void> deleteMany(Iterable<Recording> recordings) async {
+    final ids = recordings.map((r) => r.id).toSet();
+    if (ids.isEmpty) return;
+    for (final r in recordings) {
+      final file = File(await pathFor(r));
+      if (await file.exists()) await file.delete();
+    }
     final all = await load();
-    all.removeWhere((r) => r.id == recording.id);
+    all.removeWhere((r) => ids.contains(r.id));
     await _save(all);
     changes.value++;
   }
@@ -221,6 +250,124 @@ class RecordingStore {
     await _save([...all, ...recovered]);
     changes.value++;
     return recovered.length;
+  }
+
+  // ---- Recently Deleted ----
+  // Deleted recordings move to a "trash" folder inside the account's folder
+  // (so recovery, which only looks at the top folder, never brings them back)
+  // and are removed for good after [trashDays] days.
+
+  Future<Directory> _trashFolder() async {
+    final dir = Directory('${(await folder()).path}/trash');
+    if (!await dir.exists()) await dir.create(recursive: true);
+    return dir;
+  }
+
+  Future<File> _trashIndex() async => File('${(await _trashFolder()).path}/trash.json');
+
+  Future<List<TrashedRecording>> _readTrash() async {
+    final file = await _trashIndex();
+    if (!await file.exists()) return [];
+    try {
+      return (jsonDecode(await file.readAsString()) as List)
+          .whereType<Map>()
+          .map((m) => TrashedRecording.fromJson(Map<String, dynamic>.from(m)))
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _writeTrash(List<TrashedRecording> items) async {
+    final file = await _trashIndex();
+    final tmp = File('${file.path}.tmp');
+    await tmp.writeAsString(jsonEncode(items.map((t) => t.toJson()).toList()));
+    await tmp.rename(file.path);
+  }
+
+  Future<String> _trashPathFor(Recording r) async => '${(await _trashFolder()).path}/${r.fileName}';
+
+  /// Moves recordings to Recently Deleted. [now] is for tests.
+  Future<void> moveToTrash(Iterable<Recording> recordings, {DateTime? now}) async {
+    final moving = recordings.toList();
+    if (moving.isEmpty) return;
+    final at = now ?? DateTime.now();
+    final trash = await _readTrash();
+    for (final r in moving) {
+      final file = File(await pathFor(r));
+      if (await file.exists()) await file.rename(await _trashPathFor(r));
+      trash.removeWhere((t) => t.recording.id == r.id);
+      trash.add(TrashedRecording(r, at));
+    }
+    await _writeTrash(trash);
+    final ids = moving.map((r) => r.id).toSet();
+    final all = await load();
+    all.removeWhere((r) => ids.contains(r.id));
+    await _save(all);
+    changes.value++;
+  }
+
+  /// What's in Recently Deleted, most recently deleted first. Anything older
+  /// than [trashDays] days is deleted for good first. [now] is for tests.
+  Future<List<TrashedRecording>> loadTrash({DateTime? now}) async {
+    final at = now ?? DateTime.now();
+    final trash = await _readTrash();
+    final keep = <TrashedRecording>[];
+    var changed = false;
+    for (final t in trash) {
+      final file = File(await _trashPathFor(t.recording));
+      if (t.daysLeft(at) == 0 || !await file.exists()) {
+        if (await file.exists()) await file.delete();
+        changed = true;
+      } else {
+        keep.add(t);
+      }
+    }
+    if (changed) await _writeTrash(keep);
+    keep.sort((a, b) => b.deletedAt.compareTo(a.deletedAt));
+    return keep;
+  }
+
+  /// Puts recordings back in the list.
+  Future<void> restore(Iterable<TrashedRecording> items) async {
+    final restoring = items.toList();
+    if (restoring.isEmpty) return;
+    final all = await load();
+    for (final t in restoring) {
+      final file = File(await _trashPathFor(t.recording));
+      if (!await file.exists()) continue;
+      await file.rename(await pathFor(t.recording));
+      all.removeWhere((r) => r.id == t.recording.id);
+      all.add(t.recording);
+    }
+    await _save(all);
+    final ids = restoring.map((t) => t.recording.id).toSet();
+    await _writeTrash((await _readTrash()).where((t) => !ids.contains(t.recording.id)).toList());
+    changes.value++;
+  }
+
+  /// Deletes recordings from Recently Deleted for good.
+  Future<void> deleteForever(Iterable<TrashedRecording> items) async {
+    final ids = items.map((t) => t.recording.id).toSet();
+    if (ids.isEmpty) return;
+    final trash = await _readTrash();
+    for (final t in trash.where((t) => ids.contains(t.recording.id))) {
+      final file = File(await _trashPathFor(t.recording));
+      if (await file.exists()) await file.delete();
+    }
+    await _writeTrash(trash.where((t) => !ids.contains(t.recording.id)).toList());
+    changes.value++;
+  }
+
+  Future<void> emptyTrash() async => deleteForever(await _readTrash());
+
+  /// Space used by Recently Deleted, in bytes.
+  Future<int> trashBytes() async {
+    var total = 0;
+    await for (final entity in (await _trashFolder()).list()) {
+      if (entity is File && !entity.path.endsWith('.json')) total += await entity.length();
+    }
+    return total;
   }
 
   /// Account deletion: remove every recording for this account.

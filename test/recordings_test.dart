@@ -56,6 +56,17 @@ void main() {
     expect(await store.load(), isEmpty);
   });
 
+  test('several recordings can be deleted at once', () async {
+    final store = RecordingStore('amy', baseDir: base);
+    final a = await addRecording(store, 'a');
+    final b = await addRecording(store, 'b');
+    await addRecording(store, 'c');
+    await store.deleteMany([a, b]);
+    expect((await store.load()).map((r) => r.id), ['c']);
+    expect(File(await store.pathFor(a)).existsSync(), isFalse);
+    expect(File(await store.pathFor(b)).existsSync(), isFalse);
+  });
+
   test('entries whose audio file is missing are skipped', () async {
     final store = RecordingStore('amy', baseDir: base);
     final r = await addRecording(store, '1');
@@ -153,5 +164,61 @@ void main() {
     expect(File(recording).existsSync(), isTrue, reason: 'a file still being recorded is left alone');
     // Running again finds nothing new.
     expect(await store.recoverUnsaved(inUse: {recording}), 0);
+  });
+
+  group('Recently Deleted', () {
+    final deletedAt = DateTime(2026, 10, 20, 12);
+
+    test('deleted recordings move to the trash and can be restored', () async {
+      final store = RecordingStore('amy', baseDir: base);
+      final a = await addRecording(store, 'a');
+      await addRecording(store, 'b');
+      await store.moveToTrash([a], now: deletedAt);
+      expect((await store.load()).map((r) => r.id), ['b']);
+      expect(await store.audioCount(), 1, reason: 'the trash does not count toward the free limit');
+      final trash = await store.loadTrash(now: deletedAt.add(const Duration(days: 1)));
+      expect(trash.map((t) => t.recording.id), ['a']);
+      expect(trash.single.daysLeft(deletedAt.add(const Duration(days: 1))), 6);
+      expect(await store.trashBytes(), greaterThan(0));
+
+      await store.restore(trash);
+      expect((await store.load()).map((r) => r.id).toSet(), {'a', 'b'});
+      expect(File(await store.pathFor(a)).existsSync(), isTrue);
+      expect(await store.loadTrash(now: deletedAt), isEmpty);
+    });
+
+    test('items are deleted for good after 7 days', () async {
+      final store = RecordingStore('amy', baseDir: base);
+      final a = await addRecording(store, 'a');
+      await store.moveToTrash([a], now: deletedAt);
+      expect(await store.loadTrash(now: deletedAt.add(const Duration(days: 6, hours: 23))), hasLength(1));
+      expect(await store.loadTrash(now: deletedAt.add(const Duration(days: 7))), isEmpty);
+      expect(await store.trashBytes(), 0);
+    });
+
+    test('delete forever and empty the trash', () async {
+      final store = RecordingStore('amy', baseDir: base);
+      final a = await addRecording(store, 'a');
+      final b = await addRecording(store, 'b');
+      final c = await addRecording(store, 'c');
+      await store.moveToTrash([a, b, c], now: deletedAt);
+      final trash = await store.loadTrash(now: deletedAt);
+      await store.deleteForever(trash.where((t) => t.recording.id == 'a'));
+      expect((await store.loadTrash(now: deletedAt)).map((t) => t.recording.id).toSet(), {'b', 'c'});
+      await store.emptyTrash();
+      expect(await store.loadTrash(now: deletedAt), isEmpty);
+      expect(await store.load(), isEmpty);
+      expect(await store.trashBytes(), 0);
+    });
+
+    test('recovery never brings back trashed recordings', () async {
+      final store = RecordingStore('amy', baseDir: base);
+      File(await store.newFilePath('1760600000000')).writeAsBytesSync(finishedMp4(timescale: 1000, duration: 30000));
+      expect(await store.recoverUnsaved(), 1);
+      final r = (await store.load()).single;
+      await store.moveToTrash([r], now: deletedAt);
+      expect(await store.recoverUnsaved(), 0);
+      expect(await store.load(), isEmpty);
+    });
   });
 }

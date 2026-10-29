@@ -6,6 +6,8 @@ import '../recording_service.dart';
 import '../recordings.dart';
 import 'metronome_control.dart';
 import 'recording_flow.dart';
+import 'tool_intro.dart';
+import 'recently_deleted_screen.dart';
 import 'recording_player_screen.dart';
 import 'video_record_screen.dart';
 import 'paywall_screen.dart';
@@ -32,8 +34,13 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   bool _loading = true;
   bool _loadFailed = false;
   int _bytes = 0;
+  int _trashCount = 0;
   late String? _pieceFilter = widget.piece;
   bool _favoritesOnly = false;
+  // true = only videos, false = only audio, null = both.
+  bool? _videoOnly;
+  // Ids of recordings picked for deleting; null when not selecting.
+  Set<String>? _selected;
 
   @override
   void initState() {
@@ -74,6 +81,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         }
         list = await store.load();
         _bytes = await store.totalBytes();
+        // Also clears out anything deleted more than 7 days ago.
+        _trashCount = (await store.loadTrash()).length;
       }
     } catch (e) {
       debugPrint('Loading recordings failed: $e');
@@ -84,19 +93,20 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         _recordings = list;
         _loading = false;
         _loadFailed = failed;
+        _selected?.removeWhere((id) => !list.any((r) => r.id == id));
+        // Only one kind left: the Audio/Video filter no longer applies.
+        if (!list.any((r) => r.isVideo) || list.every((r) => r.isVideo)) _videoOnly = null;
       });
     }
     if (recovered > 0 && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(recovered == 1
-            ? 'Found 1 recording that wasn\'t saved — it\'s been added to your list.'
-            : 'Found $recovered recordings that weren\'t saved — they\'ve been added to your list.'),
+        content: Text(recovered == 1 ? 'Found 1 recording that wasn\'t saved — it\'s been added to your list.' : 'Found $recovered recordings that weren\'t saved — they\'ve been added to your list.'),
       ));
     }
   }
 
   List<Recording> get _visible {
-    var list = _recordings.where((r) => !_favoritesOnly || r.favorite);
+    var list = _recordings.where((r) => (!_favoritesOnly || r.favorite) && (_videoOnly == null || r.isVideo == _videoOnly));
     if (_pieceFilter != null) {
       // One piece: oldest first, so you can hear your progress.
       return list.where((r) => r.piece == _pieceFilter).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -125,35 +135,86 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
     await RecordingStore(uid).update(r);
   }
 
-  Future<bool> _confirmDelete(Recording r) async {
+  /// Moves recordings to Recently Deleted, with Undo.
+  Future<void> _moveToTrash(List<Recording> recordings) async {
+    final uid = AuthService().currentUser?.uid;
+    if (uid == null || recordings.isEmpty) return;
+    final ids = recordings.map((r) => r.id).toSet();
+    // Remove from the list right away (Dismissible needs it gone); the
+    // store's change notice reloads the list.
+    setState(() => _recordings.removeWhere((x) => ids.contains(x.id)));
+    final store = RecordingStore(uid);
+    try {
+      await store.moveToTrash(recordings);
+    } catch (e) {
+      debugPrint('Deleting recordings failed: $e');
+      _load();
+      return;
+    }
+    if (!mounted) return;
+    final n = recordings.length;
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(
+        content: Text(n == 1 ? 'Moved to Recently Deleted.' : 'Moved $n recordings to Recently Deleted.'),
+        duration: const Duration(seconds: 5),
+        persist: false,
+        action: SnackBarAction(
+          label: 'Undo',
+          onPressed: () async {
+            final trash = await store.loadTrash();
+            await store.restore(trash.where((t) => ids.contains(t.recording.id)));
+          },
+        ),
+      ));
+  }
+
+  void _startSelecting([Recording? first]) => setState(() => _selected = {if (first != null) first.id});
+
+  void _stopSelecting() => setState(() => _selected = null);
+
+  void _toggleSelected(Recording r) => setState(() {
+        final selected = _selected!;
+        if (!selected.remove(r.id)) selected.add(r.id);
+      });
+
+  Future<void> _deleteSelected() async {
+    final ids = _selected;
+    if (ids == null || ids.isEmpty) return;
+    final chosen = _recordings.where((r) => ids.contains(r.id)).toList();
+    final count = chosen.length;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: _cardBg,
-        title: Text(r.isVideo ? 'Delete Video?' : 'Delete Recording?', style: const TextStyle(color: Colors.white)),
-        content: Text('"${r.title}" will be permanently deleted from this device.', style: const TextStyle(color: Colors.white70)),
+        title: Text(count == 1 ? 'Delete 1 Recording?' : 'Delete $count Recordings?', style: const TextStyle(color: Colors.white)),
+        content: Text(
+          '${count == 1 ? 'It moves' : 'They move'} to Recently Deleted, where you can restore ${count == 1 ? 'it' : 'them'} for ${RecordingStore.trashDays} days.',
+          style: const TextStyle(color: Colors.white70),
+        ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel', style: TextStyle(color: Colors.white54))),
           TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Delete', style: TextStyle(color: Colors.red))),
         ],
       ),
     );
-    return ok == true;
+    if (ok != true || !mounted) return;
+    setState(() => _selected = null);
+    await _moveToTrash(chosen);
   }
 
-  Future<void> _delete(Recording r) async {
-    final uid = AuthService().currentUser?.uid;
-    if (uid == null) return;
-    // Remove from the list right away (Dismissible needs it gone), then
-    // from the device; the store's change notice reloads the list.
-    setState(() => _recordings.removeWhere((x) => x.id == r.id));
-    try {
-      await RecordingStore(uid).delete(r);
-    } catch (e) {
-      debugPrint('Deleting recording failed: $e');
-      _load();
-    }
-  }
+  Widget _selectCircle(bool selected) => AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        width: 24,
+        height: 24,
+        margin: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: selected ? _pink : Colors.transparent,
+          border: Border.all(color: selected ? _pink : Colors.white38, width: 2),
+        ),
+        child: selected ? const Icon(Icons.check, color: Colors.white, size: 16) : null,
+      );
 
   Future<void> _openVideo() async {
     if (RecordingService().isRecording) {
@@ -268,116 +329,198 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   Widget build(BuildContext context) {
     final pieces = _recordings.map((r) => r.piece).where((p) => p.isNotEmpty).toSet().toList()..sort();
     final visible = _visible;
-    return Scaffold(
-      backgroundColor: _darkBg,
-      appBar: AppBar(
-        title: Text(widget.piece ?? 'Recordings', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [_purple, Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight))),
-      ),
-      body: ListView(
-        padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
-        children: [
-          _recordCard(),
-          if (_recordings.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                'Using ${_formatBytes(_bytes)} on this iPhone'
-                '${_recordings.any((r) => r.isVideo) ? ' · Videos aren\'t included in iCloud Backup' : ''}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white38, fontSize: 11),
-              ),
-            ),
-          const SizedBox(height: 20),
-          if (_recordings.isNotEmpty)
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: Row(children: [
-                _filterChip(
-                    'All',
-                    _pieceFilter == null && !_favoritesOnly,
-                    () => setState(() {
-                          _pieceFilter = null;
-                          _favoritesOnly = false;
-                        })),
-                _filterChip('⭐ Favorites', _favoritesOnly, () => setState(() => _favoritesOnly = !_favoritesOnly)),
-                ...pieces.map((p) => _filterChip(p, _pieceFilter == p, () => setState(() => _pieceFilter = _pieceFilter == p ? null : p))),
-              ]),
-            ),
-          if (_pieceFilter != null && visible.isNotEmpty)
-            const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: Text('Oldest to newest — hear your progress', style: TextStyle(color: Colors.white38, fontSize: 12)),
-            ),
-          const SizedBox(height: 12),
-          if (_loading)
-            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: _purple)))
-          else if (_loadFailed)
-            const Padding(
-              padding: EdgeInsets.all(24),
-              child: Text('Couldn\'t open your recordings. Please close and reopen Zyntune.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
-            )
-          else if (visible.isEmpty)
-            Padding(
-              padding: const EdgeInsets.all(24),
-              child: Text(
-                _recordings.isEmpty ? 'No recordings yet. Tap the red button to record a lesson or your practice.' : 'No recordings match this filter.',
-                textAlign: TextAlign.center,
-                style: const TextStyle(color: Colors.white38),
-              ),
-            )
-          else
-            ...visible.map((r) => Dismissible(
-                key: ValueKey(r.id),
-                // Swipe left to delete, after confirming.
-                direction: DismissDirection.endToStart,
-                confirmDismiss: (_) => _confirmDelete(r),
-                onDismissed: (_) => _delete(r),
-                background: Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.only(right: 20),
-                  alignment: Alignment.centerRight,
-                  decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(16)),
-                  child: const Icon(Icons.delete_outline, color: Colors.white),
+    final videoCount = _recordings.where((r) => r.isVideo).length;
+    final audioCount = _recordings.length - videoCount;
+    final selected = _selected;
+    final selecting = selected != null;
+    final allSelected = selecting && visible.isNotEmpty && visible.every((r) => selected.contains(r.id));
+    return PopScope(
+      // While selecting, "back" just stops selecting.
+      canPop: !selecting,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) _stopSelecting();
+      },
+      child: Scaffold(
+        backgroundColor: _darkBg,
+        appBar: AppBar(
+          title: Text(
+            selecting ? (selected.isEmpty ? 'Select Recordings' : '${selected.length} Selected') : (widget.piece ?? 'Recordings'),
+            style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+          ),
+          leadingWidth: selecting ? 84 : null,
+          leading: selecting ? TextButton(onPressed: _stopSelecting, child: const Text('Cancel', style: TextStyle(color: Colors.white))) : null,
+          actions: [
+            if (!selecting) const ToolIntroButton('record'),
+            if (selecting)
+              TextButton(
+                onPressed: () => setState(() {
+                  if (allSelected) {
+                    selected.removeAll(visible.map((r) => r.id));
+                  } else {
+                    selected.addAll(visible.map((r) => r.id));
+                  }
+                }),
+                child: Text(allSelected ? 'Deselect All' : 'Select All', style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),
+              )
+            else if (_recordings.isNotEmpty)
+              TextButton(onPressed: _startSelecting, child: const Text('Select', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+          ],
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: Colors.white),
+          flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [_purple, Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight))),
+        ),
+        body: ListView(
+          padding: const EdgeInsets.fromLTRB(16, 20, 16, 96),
+          children: [
+            if (!selecting) _recordCard(),
+            if (_recordings.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  'Using ${_formatBytes(_bytes)} on this iPhone'
+                  '${_recordings.any((r) => r.isVideo) ? ' · Videos aren\'t included in iCloud Backup' : ''}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white38, fontSize: 11),
                 ),
-                child: GestureDetector(
-                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecordingPlayerScreen(recording: r))),
-                  child: Container(
+              ),
+            const SizedBox(height: 20),
+            if (_recordings.isNotEmpty)
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(children: [
+                  _filterChip(
+                      'All',
+                      _pieceFilter == null && !_favoritesOnly && _videoOnly == null,
+                      () => setState(() {
+                            _pieceFilter = null;
+                            _favoritesOnly = false;
+                            _videoOnly = null;
+                          })),
+                  // Audio / Video, once there are both kinds.
+                  if (audioCount > 0 && videoCount > 0) ...[
+                    _filterChip('Audio ($audioCount)', _videoOnly == false, () => setState(() => _videoOnly = _videoOnly == false ? null : false)),
+                    _filterChip('Video ($videoCount)', _videoOnly == true, () => setState(() => _videoOnly = _videoOnly == true ? null : true)),
+                  ],
+                  _filterChip('⭐ Favorites', _favoritesOnly, () => setState(() => _favoritesOnly = !_favoritesOnly)),
+                  ...pieces.map((p) => _filterChip(p, _pieceFilter == p, () => setState(() => _pieceFilter = _pieceFilter == p ? null : p))),
+                ]),
+              ),
+            if (_pieceFilter != null && visible.isNotEmpty)
+              const Padding(
+                padding: EdgeInsets.only(top: 12),
+                child: Text('Oldest to newest — hear your progress', style: TextStyle(color: Colors.white38, fontSize: 12)),
+              ),
+            const SizedBox(height: 12),
+            if (_loading)
+              const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator(color: _purple)))
+            else if (_loadFailed)
+              const Padding(
+                padding: EdgeInsets.all(24),
+                child: Text('Couldn\'t open your recordings. Please close and reopen Zyntune.', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54)),
+              )
+            else if (visible.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(24),
+                child: Text(
+                  _recordings.isEmpty ? 'No recordings yet. Tap the red button to record a lesson or your practice.' : 'No recordings match this filter.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white38),
+                ),
+              )
+            else
+              ...visible.map((r) => Dismissible(
+                  key: ValueKey(r.id),
+                  // Swipe left to move to Recently Deleted (not while selecting).
+                  direction: selecting ? DismissDirection.none : DismissDirection.endToStart,
+                  onDismissed: (_) => _moveToTrash([r]),
+                  background: Container(
                     margin: const EdgeInsets.only(bottom: 10),
-                    padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [_cardBg, _cardBg2]),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _purple.withValues(alpha: 0.25)),
-                    ),
-                    child: Row(children: [
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(color: (r.isVideo ? _purple : _recordRed).withValues(alpha: 0.15), shape: BoxShape.circle),
-                        child: Icon(r.isVideo ? Icons.videocam : Icons.graphic_eq, color: r.isVideo ? _purple : _recordRed, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Text(r.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          if (r.piece.isNotEmpty && r.pieceLabel != r.title)
-                            Text(r.pieceLabel, style: const TextStyle(color: _pink, fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-                          Text('${formatFullDate(r.createdAt)} · ${_formatDuration(r.durationMs)}${r.markers.isNotEmpty ? ' · ${r.markers.length} marker${r.markers.length == 1 ? '' : 's'}' : ''}',
-                              style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                        ]),
-                      ),
-                      IconButton(
-                        tooltip: r.favorite ? 'Remove from favorites' : 'Add to favorites',
-                        icon: Icon(r.favorite ? Icons.star_rounded : Icons.star_border_rounded, color: r.favorite ? Colors.amber : Colors.white30),
-                        onPressed: () => _toggleFavorite(r),
-                      ),
-                    ]),
+                    padding: const EdgeInsets.only(right: 20),
+                    alignment: Alignment.centerRight,
+                    decoration: BoxDecoration(color: Colors.red.shade700, borderRadius: BorderRadius.circular(16)),
+                    child: const Icon(Icons.delete_outline, color: Colors.white),
                   ),
-                ))),
-        ],
+                  child: GestureDetector(
+                    onTap: selecting ? () => _toggleSelected(r) : () => Navigator.push(context, MaterialPageRoute(builder: (_) => RecordingPlayerScreen(recording: r))),
+                    // Press and hold to start selecting, like Photos and Mail.
+                    onLongPress: selecting ? null : () => _startSelecting(r),
+                    child: Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      padding: const EdgeInsets.fromLTRB(14, 10, 6, 10),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [_cardBg, _cardBg2]),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: selecting && selected.contains(r.id) ? _pink : _purple.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(children: [
+                        if (selecting) _selectCircle(selected.contains(r.id)),
+                        Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(color: (r.isVideo ? _purple : _recordRed).withValues(alpha: 0.15), shape: BoxShape.circle),
+                          child: Icon(r.isVideo ? Icons.videocam : Icons.graphic_eq, color: r.isVideo ? _purple : _recordRed, size: 20),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Text(r.title, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            if (r.piece.isNotEmpty && r.pieceLabel != r.title)
+                              Text(r.pieceLabel, style: const TextStyle(color: _pink, fontSize: 12, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            Text('${formatFullDate(r.createdAt)} · ${_formatDuration(r.durationMs)}${r.markers.isNotEmpty ? ' · ${r.markers.length} marker${r.markers.length == 1 ? '' : 's'}' : ''}',
+                                style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                          ]),
+                        ),
+                        if (selecting)
+                          const SizedBox(width: 12)
+                        else
+                          IconButton(
+                            tooltip: r.favorite ? 'Remove from favorites' : 'Add to favorites',
+                            icon: Icon(r.favorite ? Icons.star_rounded : Icons.star_border_rounded, color: r.favorite ? Colors.amber : Colors.white30),
+                            onPressed: () => _toggleFavorite(r),
+                          ),
+                      ]),
+                    ),
+                  ))),
+            if (!selecting && _trashCount > 0)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: ListTile(
+                  onTap: () {
+                    ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                    Navigator.push(context, MaterialPageRoute(builder: (_) => const RecentlyDeletedScreen())).then((_) => _load());
+                  },
+                  tileColor: Colors.white.withValues(alpha: 0.05),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  leading: const Icon(Icons.delete_outline, color: Colors.white54),
+                  title: const Text('Recently Deleted', style: TextStyle(color: Colors.white70, fontWeight: FontWeight.w600)),
+                  trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text('$_trashCount', style: const TextStyle(color: Colors.white54)),
+                    const Icon(Icons.chevron_right, color: Colors.white38),
+                  ]),
+                ),
+              ),
+          ],
+        ),
+        bottomNavigationBar: selecting
+            ? SafeArea(
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: ElevatedButton.icon(
+                    onPressed: selected.isEmpty ? null : _deleteSelected,
+                    icon: const Icon(Icons.delete_outline),
+                    label: Text(selected.isEmpty ? 'Delete' : 'Delete (${selected.length})', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red.shade700,
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: Colors.white12,
+                      disabledForegroundColor: Colors.white38,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                  ),
+                ),
+              )
+            : null,
       ),
     );
   }

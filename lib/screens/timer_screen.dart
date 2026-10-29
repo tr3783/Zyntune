@@ -18,6 +18,7 @@ import '../firestore_service.dart';
 import 'session_card.dart';
 import 'paywall_screen.dart';
 import 'streak_celebration.dart';
+import 'tool_intro.dart';
 
 class PracticeSession {
   final String id;
@@ -194,6 +195,12 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
     }
   }
 
+  // Piece names from a teacher's assignment and from the repertoire can
+  // differ in capitals or spacing; they're the same piece.
+  static String _pieceKey(String name) => name.trim().toLowerCase().replaceAll(RegExp(r'\s+'), ' ');
+
+  bool _isAssigned(String name) => _assignedPieces.any((p) => _pieceKey(p) == _pieceKey(name));
+
   Future<void> _loadPieces() async {
     final prefs = await SharedPreferences.getInstance();
     final data = prefs.getStringList('songs') ?? [];
@@ -205,17 +212,17 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
         final map = jsonDecode(s) as Map<String, dynamic>;
         final title = map['title'] as String? ?? '';
         final composer = map['composer'] as String? ?? '';
-        if (title.isNotEmpty) {
+        if (title.trim().isNotEmpty) {
           names.add(title);
-          composers[title] = composer;
+          composers[_pieceKey(title)] = composer;
           final rawMovements = map['movements'];
           if (rawMovements is List) {
-            movements[title] = rawMovements
+            movements[_pieceKey(title)] = rawMovements
                 .map((m) => m is Map ? (m['title'] ?? '').toString() : m.toString())
                 .where((t) => t.trim().isNotEmpty)
                 .toList();
           } else if (rawMovements is String && rawMovements.trim().isNotEmpty) {
-            movements[title] = [rawMovements];
+            movements[_pieceKey(title)] = [rawMovements];
           }
         }
       } catch (_) {}
@@ -380,25 +387,25 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
 
   Widget _buildPieceSelector(List<String> selectedRef, StateSetter setDialogState) {
     // Build combined list (assigned first, then repertoire, no duplicates)
+    // An assigned piece that's also in the repertoire uses the repertoire's
+    // name, so its movements show.
     final combined = <String>[];
-    for (final p in _assignedPieces) {
-      if (!combined.contains(p)) combined.add(p);
-    }
-    for (final p in _pieceNames) {
-      if (!combined.contains(p)) combined.add(p);
+    final seen = <String>{};
+    for (final p in [..._assignedPieces.map((a) => _pieceNames.firstWhere((n) => _pieceKey(n) == _pieceKey(a), orElse: () => a)), ..._pieceNames]) {
+      if (seen.add(_pieceKey(p))) combined.add(p);
     }
     // Group by composer
     final Map<String, List<String>> groups = {};
     for (final name in combined) {
-      final composer = (_pieceComposers[name] ?? '').trim();
+      final composer = (_pieceComposers[_pieceKey(name)] ?? '').trim();
       final groupKey = composer.isEmpty ? 'Other' : composer;
       groups.putIfAbsent(groupKey, () => []).add(name);
     }
     // Sort pieces within each group alphabetically (but keep assigned at top within group)
     for (final group in groups.values) {
       group.sort((a, b) {
-        final aAssigned = _assignedPieces.contains(a);
-        final bAssigned = _assignedPieces.contains(b);
+        final aAssigned = _isAssigned(a);
+        final bAssigned = _isAssigned(b);
         if (aAssigned && !bAssigned) return -1;
         if (!aAssigned && bAssigned) return 1;
         return a.toLowerCase().compareTo(b.toLowerCase());
@@ -479,7 +486,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                   spacing: 8, runSpacing: 8,
                   children: pieces.map((name) {
                     final isSelected = selectedRef[0] == name;
-                    final isAssigned = _assignedPieces.contains(name);
+                    final isAssigned = _isAssigned(name);
                     return GestureDetector(
                       onTap: () => setDialogState(() => _selectPiece(selectedRef, name)),
                       child: Container(
@@ -502,12 +509,12 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
                   }).toList(),
                 ),
               ),
+              // Movements of the selected piece, right under its group so
+              // they're seen without scrolling.
+              if (pieces.contains(selectedRef[0])) ..._buildMovementSelector(selectedRef, setDialogState),
             ],
           );
         }),
-
-        // Movement of the selected piece, if it has movements
-        ..._buildMovementSelector(selectedRef, setDialogState),
 
         if (_assignedPieces.isNotEmpty) ...[
           const SizedBox(height: 4),
@@ -529,7 +536,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
   }
 
   List<Widget> _buildMovementSelector(List<String> selectedRef, StateSetter setDialogState) {
-    final movements = _pieceMovements[selectedRef[0]] ?? const <String>[];
+    final movements = _pieceMovements[_pieceKey(selectedRef[0])] ?? const <String>[];
     if (selectedRef.length < 2 || movements.isEmpty) return const [];
     Widget chip(String label, String value) {
       final isSelected = selectedRef[1] == value;
@@ -548,7 +555,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       );
     }
     return [
-      const Text('Movement', style: TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
+      Text('Movement of ${selectedRef[0]}', style: const TextStyle(color: Colors.white70, fontSize: 13, fontWeight: FontWeight.w600)),
       const SizedBox(height: 8),
       Padding(
         padding: const EdgeInsets.only(bottom: 12),
@@ -1041,6 +1048,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text('Practice Timer', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         actions: [
+          const ToolIntroButton('timer'),
           // Record while practicing; the recording bar shows it's running.
           ListenableBuilder(
             listenable: RecordingService(),

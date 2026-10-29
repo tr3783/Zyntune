@@ -7,6 +7,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
+import 'tool_intro.dart';
 
 class TunerScreen extends StatefulWidget {
   const TunerScreen({super.key});
@@ -268,6 +269,7 @@ class _TunerScreenState extends State<TunerScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
       appBar: AppBar(
+        actions: const [ToolIntroButton('tuner')],
         title: const Text('Tuner',
             style: TextStyle(
                 fontWeight: FontWeight.bold, color: Colors.white)),
