@@ -36,6 +36,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   int _trashCount = 0;
   late String? _pieceFilter = widget.piece;
   bool _favoritesOnly = false;
+  // true = only videos, false = only audio, null = both.
+  bool? _videoOnly;
   // Ids of recordings picked for deleting; null when not selecting.
   Set<String>? _selected;
 
@@ -91,6 +93,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
         _loading = false;
         _loadFailed = failed;
         _selected?.removeWhere((id) => !list.any((r) => r.id == id));
+        // Only one kind left: the Audio/Video filter no longer applies.
+        if (!list.any((r) => r.isVideo) || list.every((r) => r.isVideo)) _videoOnly = null;
       });
     }
     if (recovered > 0 && mounted) {
@@ -101,7 +105,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   }
 
   List<Recording> get _visible {
-    var list = _recordings.where((r) => !_favoritesOnly || r.favorite);
+    var list = _recordings.where((r) => (!_favoritesOnly || r.favorite) && (_videoOnly == null || r.isVideo == _videoOnly));
     if (_pieceFilter != null) {
       // One piece: oldest first, so you can hear your progress.
       return list.where((r) => r.piece == _pieceFilter).toList()..sort((a, b) => a.createdAt.compareTo(b.createdAt));
@@ -324,6 +328,8 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
   Widget build(BuildContext context) {
     final pieces = _recordings.map((r) => r.piece).where((p) => p.isNotEmpty).toSet().toList()..sort();
     final visible = _visible;
+    final videoCount = _recordings.where((r) => r.isVideo).length;
+    final audioCount = _recordings.length - videoCount;
     final selected = _selected;
     final selecting = selected != null;
     final allSelected = selecting && visible.isNotEmpty && visible.every((r) => selected.contains(r.id));
@@ -383,11 +389,17 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
                 child: Row(children: [
                   _filterChip(
                       'All',
-                      _pieceFilter == null && !_favoritesOnly,
+                      _pieceFilter == null && !_favoritesOnly && _videoOnly == null,
                       () => setState(() {
                             _pieceFilter = null;
                             _favoritesOnly = false;
+                            _videoOnly = null;
                           })),
+                  // Audio / Video, once there are both kinds.
+                  if (audioCount > 0 && videoCount > 0) ...[
+                    _filterChip('Audio ($audioCount)', _videoOnly == false, () => setState(() => _videoOnly = _videoOnly == false ? null : false)),
+                    _filterChip('Video ($videoCount)', _videoOnly == true, () => setState(() => _videoOnly = _videoOnly == true ? null : true)),
+                  ],
                   _filterChip('⭐ Favorites', _favoritesOnly, () => setState(() => _favoritesOnly = !_favoritesOnly)),
                   ...pieces.map((p) => _filterChip(p, _pieceFilter == p, () => setState(() => _pieceFilter = _pieceFilter == p ? null : p))),
                 ]),
