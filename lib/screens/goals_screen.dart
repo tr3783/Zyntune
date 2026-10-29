@@ -4,6 +4,7 @@ import '../account_data_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../firestore_service.dart';
+import 'tool_intro.dart';
 
 enum GoalCategory { daily, weekly, monthly }
 
@@ -344,6 +345,7 @@ class _GoalsScreenState extends State<GoalsScreen> {
         iconTheme: const IconThemeData(color: Colors.white),
         flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [_purple, Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight))),
         actions: [
+          const ToolIntroButton('goals'),
           GestureDetector(
             onTap: () => setState(() => _showCompleted = !_showCompleted),
             child: Container(

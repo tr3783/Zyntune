@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import '../metronome_service.dart';
 import '../purchase_service.dart';
 import 'paywall_screen.dart';
+import 'tool_intro.dart';
 
 class MetronomeScreen extends StatefulWidget {
   const MetronomeScreen({super.key});
@@ -186,6 +187,7 @@ class _MetronomeScreenState extends State<MetronomeScreen>
     return Scaffold(
       backgroundColor: const Color(0xFF0D0D1A),
       appBar: AppBar(
+        actions: const [ToolIntroButton('metronome')],
         title: const Text('Metronome',
             style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,

@@ -26,6 +26,7 @@ import 'teacher_reminder_card.dart';
 import 'recordings_screen.dart';
 import '../notification_router.dart';
 import 'link_teacher_screen.dart';
+import 'tool_intro.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -507,6 +508,7 @@ class _HomeScreenState extends State<HomeScreen> {
         automaticallyImplyLeading: false,
         flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [Color(0xFF6B21FF), Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight))),
         actions: [
+          const ToolIntroButton('home', autoShow: false),
           IconButton(icon: const Icon(Icons.settings_outlined, color: Colors.white), onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen())).then((_) => _loadData())),
         ],
       ),

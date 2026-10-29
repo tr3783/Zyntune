@@ -6,6 +6,7 @@ import '../recording_service.dart';
 import '../recordings.dart';
 import 'metronome_control.dart';
 import 'recording_flow.dart';
+import 'tool_intro.dart';
 import 'recently_deleted_screen.dart';
 import 'recording_player_screen.dart';
 import 'video_record_screen.dart';
@@ -349,6 +350,7 @@ class _RecordingsScreenState extends State<RecordingsScreen> {
           leadingWidth: selecting ? 84 : null,
           leading: selecting ? TextButton(onPressed: _stopSelecting, child: const Text('Cancel', style: TextStyle(color: Colors.white))) : null,
           actions: [
+            if (!selecting) const ToolIntroButton('record'),
             if (selecting)
               TextButton(
                 onPressed: () => setState(() {

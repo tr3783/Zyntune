@@ -7,6 +7,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import '../auth_service.dart';
 import '../firestore_service.dart';
 import 'assignment_screen.dart';
+import 'tool_intro.dart';
 
 class StudioScreen extends StatefulWidget {
   const StudioScreen({super.key});
@@ -63,6 +64,7 @@ class _StudioScreenState extends State<StudioScreen> {
     return Scaffold(
       backgroundColor: _darkBg,
       appBar: AppBar(
+        actions: const [ToolIntroButton('studio')],
         title: const Text('Studio', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,

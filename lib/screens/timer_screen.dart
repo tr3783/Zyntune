@@ -18,6 +18,7 @@ import '../firestore_service.dart';
 import 'session_card.dart';
 import 'paywall_screen.dart';
 import 'streak_celebration.dart';
+import 'tool_intro.dart';
 
 class PracticeSession {
   final String id;
@@ -1047,6 +1048,7 @@ class _TimerScreenState extends State<TimerScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         title: const Text('Practice Timer', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         actions: [
+          const ToolIntroButton('timer'),
           // Record while practicing; the recording bar shows it's running.
           ListenableBuilder(
             listenable: RecordingService(),

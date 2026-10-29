@@ -10,6 +10,7 @@ import 'dart:io';
 import '../purchase_service.dart';
 import 'paywall_screen.dart';
 import '../streak_helper.dart';
+import 'tool_intro.dart';
 
 // --- Achievement model ---
 class Achievement {
@@ -584,6 +585,7 @@ Keep practicing! 🎸''';
         iconTheme: const IconThemeData(color: Colors.white),
         flexibleSpace: Container(decoration: const BoxDecoration(gradient: LinearGradient(colors: [_purple, Color(0xFF9B59B6)], begin: Alignment.topLeft, end: Alignment.bottomRight))),
         actions: [
+          const ToolIntroButton('stats'),
           if (_totalSessions > 0)
             IconButton(
               icon: const Icon(Icons.download_outlined, color: Colors.white),

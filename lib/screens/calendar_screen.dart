@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../purchase_service.dart';
 import 'paywall_screen.dart';
+import 'tool_intro.dart';
 
 enum EventType { recital, audition, lesson, deadline, performance, other }
 
@@ -308,6 +309,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       backgroundColor: _darkBg,
       appBar: AppBar(
+        actions: const [ToolIntroButton('calendar')],
         title: const Text('Practice Calendar', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.transparent,
         elevation: 0,
